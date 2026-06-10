@@ -1,3 +1,4 @@
+[inventario-scanner (4).html](https://github.com/user-attachments/files/28806196/inventario-scanner.4.html)
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -495,15 +496,27 @@
   <div id="tab-export" class="section">
     <div class="session-badge" id="export-summary">Cargá productos para exportar</div>
     <div class="export-grid">
-      <div class="export-card" onclick="document.getElementById('import-file').click()">
+
+      <!-- IMPORTAR -->
+      <div class="export-card" onclick="document.getElementById('import-file').click()" style="border-color:rgba(0,200,83,0.4);background:rgba(0,200,83,0.06)">
         <div class="export-icon">📥</div>
         <div class="export-info">
-          <h3>Importar desde Excel</h3>
+          <h3 style="color:var(--verde)">Importar desde Excel</h3>
           <p>Cargá la plantilla completada con tus productos</p>
         </div>
       </div>
       <input type="file" id="import-file" accept=".xlsx,.xls" style="display:none" onchange="importXLSX(this)">
 
+      <!-- GOOGLE SHEETS EN TIEMPO REAL -->
+      <div class="export-card" onclick="showSheetsPanel()" style="border-color:rgba(21,101,192,0.4);background:rgba(21,101,192,0.06)">
+        <div class="export-icon">📡</div>
+        <div class="export-info">
+          <h3 style="color:#64B5F6">Sincronizar con Google Sheets</h3>
+          <p>Cada escaneo se guarda en tu planilla en tiempo real</p>
+        </div>
+      </div>
+
+      <!-- EXPORTAR XLSX -->
       <div class="export-card" onclick="exportXLSX()">
         <div class="export-icon">📊</div>
         <div class="export-info">
@@ -511,6 +524,8 @@
           <p>Incluye inventario, auditoría y resumen por categoría</p>
         </div>
       </div>
+
+      <!-- EXPORTAR CSV -->
       <div class="export-card" onclick="exportCSV()">
         <div class="export-icon">📄</div>
         <div class="export-info">
@@ -518,6 +533,8 @@
           <p>Compatible con Google Sheets y cualquier programa</p>
         </div>
       </div>
+
+      <!-- COPIAR TEXTO -->
       <div class="export-card" onclick="copyText()">
         <div class="export-icon">📋</div>
         <div class="export-info">
@@ -525,15 +542,75 @@
           <p>Para pegar en WhatsApp, email o notas</p>
         </div>
       </div>
+
+      <!-- BORRAR TODO -->
       <div class="export-card" onclick="clearAll()">
         <div class="export-icon">🗑️</div>
-        <div class="export-info" style="color:var(--rojo)">
+        <div class="export-info">
           <h3 style="color:var(--rojo)">Borrar todo el inventario</h3>
           <p style="color:var(--muted)">Empezar desde cero (mantiene auditoría)</p>
         </div>
       </div>
     </div>
-    <div style="margin-top:18px; padding:16px; background:var(--card); border-radius:12px; border:1px solid var(--border);">
+
+    <!-- PANEL GOOGLE SHEETS -->
+    <div id="sheets-panel" style="display:none;margin-top:14px;background:var(--card);border:1px solid #1565C0;border-radius:14px;padding:18px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <span style="font-size:24px">📡</span>
+        <div>
+          <div style="font-weight:800;font-size:14px;color:#64B5F6">Sincronización con Google Sheets</div>
+          <div style="font-size:11px;color:var(--muted)">Cada producto escaneado se envía a tu planilla</div>
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;display:block;margin-bottom:5px;">URL del Web App (Google Apps Script)</label>
+        <input id="sheets-url" type="url" placeholder="https://script.google.com/macros/s/..." style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:12px;font-family:var(--font);">
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <button class="btn btn-blue" onclick="saveSheetUrl()" style="flex:1;font-size:12px;padding:10px;">💾 Guardar URL</button>
+        <button class="btn btn-secondary" onclick="testSheetConnection()" style="flex:1;font-size:12px;padding:10px;">🔗 Probar conexión</button>
+        <button class="btn btn-secondary" onclick="syncAllToSheets()" style="flex:1;font-size:12px;padding:10px;">⬆️ Enviar todo</button>
+      </div>
+      <div id="sheets-status" style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:12px;"></div>
+      <div style="background:var(--bg);border-radius:10px;padding:14px;font-size:11px;color:var(--muted);line-height:1.9;">
+        <strong style="color:var(--text);display:block;margin-bottom:6px;">📋 Cómo configurarlo (5 minutos):</strong>
+        1. Abrí <strong style="color:#64B5F6">Google Sheets</strong> → creá una planilla nueva<br>
+        2. Menú <strong style="color:var(--text)">Extensiones → Apps Script</strong><br>
+        3. Borrá el código que hay y pegá el script que te doy abajo<br>
+        4. Clic en <strong style="color:var(--text)">Implementar → Nueva implementación → Aplicación web</strong><br>
+        5. Acceso: <strong style="color:var(--text)">"Cualquier usuario"</strong> → Implementar → Copiá la URL<br>
+        6. Pegá esa URL arriba y tocá <strong style="color:var(--verde)">Guardar URL</strong>
+      </div>
+      <div style="margin-top:12px;background:#0D1117;border-radius:8px;padding:12px;font-size:10px;color:#8B949E;font-family:monospace;overflow-x:auto;white-space:pre;line-height:1.7" id="apps-script-code">function doPost(e) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const data  = JSON.parse(e.postData.contents);
+
+  // Cabecera si la planilla está vacía
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(['Código','Nombre','Cantidad','Precio',
+                     'Categoría','Operador','Fecha/Hora','Local']);
+  }
+
+  if (Array.isArray(data)) {
+    data.forEach(function(p) {
+      sheet.appendRow([p.barcode||'', p.name, p.qty,
+        p.price||0, p.cat||'', p.operator||'',
+        p.datetime||'', p.store||'']);
+    });
+  } else {
+    sheet.appendRow([data.barcode||'', data.name, data.qty,
+      data.price||0, data.cat||'', data.operator||'',
+      data.datetime||'', data.store||'']);
+  }
+
+  return ContentService
+    .createTextOutput(JSON.stringify({ok:true}))
+    .setMimeType(ContentService.MimeType.JSON);
+}</div>
+      <button onclick="copyScriptCode()" style="margin-top:8px;width:100%;background:transparent;border:1px solid var(--border);color:var(--muted);padding:8px;border-radius:8px;font-size:11px;cursor:pointer;font-family:var(--font);">📋 Copiar script</button>
+    </div>
+
+    <div style="margin-top:14px; padding:14px; background:var(--card); border-radius:12px; border:1px solid var(--border);">
       <h3 style="font-size:12px; color:var(--muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:0.5px;">📱 Cómo ver en la PC</h3>
       <ol style="font-size:12px; color:var(--muted); line-height:2.2; padding-left:18px;">
         <li>Exportá el archivo <strong style="color:var(--text)">.xlsx</strong> desde el celular</li>
@@ -798,6 +875,7 @@ function addProduct() {
 
   inventory.unshift(item);
   addAudit('add', `Producto agregado — ${qty} un. · $${price}`, name);
+  sendToSheets(item);
   save();
   showToast(`✅ ${name} agregado (${qty} un.)`);
   clearForm();
@@ -1123,7 +1201,81 @@ function importXLSX(input) {
   reader.readAsArrayBuffer(file);
 }
 
+// ══ GOOGLE SHEETS SYNC ══
+let sheetsUrl = localStorage.getItem('mm_sheets_url') || '';
 
+function showSheetsPanel() {
+  const panel = document.getElementById('sheets-panel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  if (sheetsUrl) document.getElementById('sheets-url').value = sheetsUrl;
+}
+
+function saveSheetUrl() {
+  sheetsUrl = document.getElementById('sheets-url').value.trim();
+  localStorage.setItem('mm_sheets_url', sheetsUrl);
+  showToast('✅ URL guardada');
+  setSheetsStatus('✅ URL guardada — cada escaneo se sincroniza automáticamente', 'green');
+}
+
+function setSheetsStatus(msg, color) {
+  const el = document.getElementById('sheets-status');
+  el.textContent = msg;
+  el.style.color = color==='green' ? 'var(--verde)' : color==='red' ? 'var(--rojo)' : 'var(--amarillo)';
+}
+
+async function sendToSheets(productData) {
+  if (!sheetsUrl) return;
+  try {
+    await fetch(sheetsUrl, {
+      method: 'POST', mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(productData)
+    });
+  } catch(e) { console.warn('Sheets sync error:', e); }
+}
+
+async function testSheetConnection() {
+  if (!sheetsUrl) { showToast('⚠️ Primero guardá la URL', 'warn'); return; }
+  setSheetsStatus('🔄 Probando conexión...', 'yellow');
+  try {
+    await fetch(sheetsUrl, {
+      method: 'POST', mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ barcode:'TEST', name:'Prueba de conexión', qty:0, price:0, cat:'Test', operator: operator.name, datetime: nowStr(), store: operator.store||'' })
+    });
+    setSheetsStatus('✅ Conexión exitosa — la planilla está recibiendo datos', 'green');
+    showToast('✅ Conexión con Google Sheets OK');
+  } catch(e) {
+    setSheetsStatus('❌ Error de conexión — verificá la URL', 'red');
+    showToast('❌ Error al conectar', 'error');
+  }
+}
+
+async function syncAllToSheets() {
+  if (!sheetsUrl) { showToast('⚠️ Primero guardá la URL', 'warn'); return; }
+  if (!inventory.length) { showToast('No hay productos para sincronizar', 'warn'); return; }
+  setSheetsStatus(`🔄 Enviando ${inventory.length} productos...`, 'yellow');
+  try {
+    await fetch(sheetsUrl, {
+      method: 'POST', mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(inventory)
+    });
+    setSheetsStatus(`✅ ${inventory.length} productos enviados a Google Sheets`, 'green');
+    showToast(`✅ ${inventory.length} productos sincronizados`);
+  } catch(e) {
+    setSheetsStatus('❌ Error al sincronizar', 'red');
+    showToast('❌ Error al sincronizar', 'error');
+  }
+}
+
+function copyScriptCode() {
+  const code = document.getElementById('apps-script-code').textContent;
+  navigator.clipboard.writeText(code).then(()=>showToast('✅ Script copiado')).catch(()=>showToast('❌ Error al copiar','error'));
+}
+
+// ══ EXPORT SUMMARY ══
+function updateExportSummary() {
   const val = inventory.reduce((s,i)=>s+i.qty*(i.price||0),0);
   document.getElementById('export-summary').textContent =
     `${inventory.length} productos · ${inventory.reduce((s,i)=>s+i.qty,0)} unidades · Valor: $${val.toLocaleString('es-AR',{minimumFractionDigits:0})}`;
@@ -1221,6 +1373,7 @@ function confirmFoundProduct() {
   foundProductRef.lastUpdate   = nowStr();
   foundProductRef.lastOperator = operator.name;
   addAudit('update', `Cantidad actualizada +${addQty} → total ${foundProductRef.qty} un.`, foundProductRef.name);
+  sendToSheets(foundProductRef);
   save();
   showToast(`✅ ${foundProductRef.name}: ${prev} → ${foundProductRef.qty} un.`);
   dismissFound();
