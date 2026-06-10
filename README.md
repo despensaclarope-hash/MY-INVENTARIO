@@ -1,4 +1,4 @@
-[inventario-scanner (1).html](https://github.com/user-attachments/files/28808632/inventario-scanner.1.html)
+[inventario-scanner (2).html](https://github.com/user-attachments/files/28815775/inventario-scanner.2.html)
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -244,6 +244,14 @@
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* ── PROGRESS ITEMS ── */
+  .prog-item { border-radius: 8px; padding: 7px 9px; font-size: 11px; font-weight: 600; line-height: 1.4; transition: opacity 0.15s; }
+  .prog-item:active { opacity: 0.7; }
+  .prog-item-ok    { background: rgba(0,200,83,0.12); border: 1px solid rgba(0,200,83,0.25); color: var(--text); }
+  .prog-item-falta { background: rgba(211,47,47,0.08); border: 1px solid rgba(211,47,47,0.2); color: var(--text); }
+  .prog-item-name  { font-weight: 700; font-size: 11px; margin-bottom: 2px; }
+  .prog-item-meta  { font-size: 10px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -319,9 +327,79 @@
 
   <div class="tabs">
     <button class="tab active" onclick="switchTab('scan',this)">📷 Escanear</button>
+    <button class="tab" onclick="switchTab('progreso',this)">📊 Progreso</button>
     <button class="tab" onclick="switchTab('list',this)">📋 Inventario</button>
     <button class="tab" onclick="switchTab('audit',this)">📝 Auditoría</button>
     <button class="tab" onclick="switchTab('export',this)">💾 Exportar</button>
+  </div>
+
+  <!-- ══════ PROGRESO ══════ -->
+  <div id="tab-progreso" class="section">
+
+    <!-- Selector de categoría -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:800;color:var(--verde);margin-bottom:10px;">📦 Seleccioná la categoría a auditar</div>
+      <select id="prog-cat-select" onchange="renderProgreso()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;font-family:var(--font);">
+        <option value="">-- Todas las categorías --</option>
+      </select>
+    </div>
+
+    <!-- Barra de progreso -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">Progreso de escaneo</div>
+        <div style="font-size:13px;font-weight:800;color:var(--verde)" id="prog-pct">0%</div>
+      </div>
+      <div style="background:var(--bg);border-radius:20px;height:12px;overflow:hidden;margin-bottom:10px;">
+        <div id="prog-bar" style="height:100%;background:linear-gradient(90deg,var(--verde),#00E676);border-radius:20px;width:0%;transition:width 0.4s ease;"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;" id="prog-stats">
+        <div style="background:rgba(0,200,83,0.1);border:1px solid rgba(0,200,83,0.3);border-radius:10px;padding:10px;text-align:center;">
+          <div style="font-size:20px;font-weight:800;color:var(--verde)" id="prog-escaneados">0</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px">Escaneados</div>
+        </div>
+        <div style="background:rgba(211,47,47,0.1);border:1px solid rgba(211,47,47,0.3);border-radius:10px;padding:10px;text-align:center;">
+          <div style="font-size:20px;font-weight:800;color:var(--rojo)" id="prog-faltanesc">0</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px">Sin escanear</div>
+        </div>
+        <div style="background:rgba(21,101,192,0.1);border:1px solid rgba(21,101,192,0.3);border-radius:10px;padding:10px;text-align:center;">
+          <div style="font-size:20px;font-weight:800;color:#64B5F6" id="prog-total-cat">0</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px">Total</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Listas lado a lado -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+
+      <!-- Escaneados -->
+      <div style="background:var(--card);border:1px solid rgba(0,200,83,0.3);border-radius:12px;overflow:hidden;">
+        <div style="background:rgba(0,200,83,0.15);padding:10px 12px;font-size:11px;font-weight:800;color:var(--verde);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid rgba(0,200,83,0.2);">
+          ✅ Escaneados
+        </div>
+        <div id="prog-list-ok" style="max-height:350px;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:4px;"></div>
+      </div>
+
+      <!-- Faltan escanear -->
+      <div style="background:var(--card);border:1px solid rgba(211,47,47,0.3);border-radius:12px;overflow:hidden;">
+        <div style="background:rgba(211,47,47,0.1);padding:10px 12px;font-size:11px;font-weight:800;color:var(--rojo);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid rgba(211,47,47,0.2);">
+          ❌ Faltan escanear
+        </div>
+        <div id="prog-list-faltan" style="max-height:350px;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:4px;"></div>
+      </div>
+
+    </div>
+
+    <!-- Botones de acción -->
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-primary" onclick="exportEscaneadosHoy()" style="flex:1;font-size:12px;">
+        📊 Exportar escaneados
+      </button>
+      <button class="btn btn-secondary" onclick="switchTab('scan',document.querySelector('.tab'))" style="flex:1;font-size:12px;">
+        📷 Ir a escanear
+      </button>
+    </div>
+
   </div>
 
   <!-- ══════ SCAN ══════ -->
@@ -630,6 +708,7 @@
 let inventory  = JSON.parse(localStorage.getItem('mm_inv')   || '[]');
 let auditLog   = JSON.parse(localStorage.getItem('mm_audit') || '[]');
 let operator   = JSON.parse(localStorage.getItem('mm_op')    || 'null');
+let maestro    = JSON.parse(localStorage.getItem('mm_maestro')|| '[]'); // productos del maestro sin escanear
 let scanning   = false;
 let currentFilter = '';
 
@@ -708,6 +787,8 @@ function refreshAll() {
   updateExportSummary();
   updateCategoryChips();
   checkLowStock();
+  updateProgresoSelector();
+  renderProgreso();
 }
 
 // ══ AUDIT LOG ══
@@ -1189,6 +1270,26 @@ function importXLSX(input) {
       }
 
       addAudit('system', `Importación: ${added} nuevos, ${updated} actualizados, ${skipped} omitidos`, null);
+
+      // Guardar todos los productos importados como maestro de referencia
+      const maestroImport = [];
+      for (let i = dataStart; i < rows.length; i++) {
+        const row  = rows[i];
+        const name = String(row[iName] || '').trim();
+        if (!name || name.toLowerCase().includes('ejemplo')) continue;
+        maestroImport.push({
+          barcode: iBarcode >= 0 ? String(row[iBarcode]||'').trim() : '',
+          name,
+          cat:     iCat >= 0 ? String(row[iCat]||'').trim() : '',
+          qty:     parseInt(row[iQty]) || 0,
+          price:   parseFloat(row[iPrice]) || 0,
+        });
+      }
+      if (maestroImport.length > 0) {
+        maestro = maestroImport;
+        localStorage.setItem('mm_maestro', JSON.stringify(maestro));
+      }
+
       save();
       showToast(`✅ ${added} agregados · ${updated} actualizados · ${skipped} omitidos`);
       input.value = '';
@@ -1201,7 +1302,135 @@ function importXLSX(input) {
   reader.readAsArrayBuffer(file);
 }
 
-// ══ GOOGLE SHEETS SYNC ══
+// ══ PROGRESO ══
+function updateProgresoSelector() {
+  const sel  = document.getElementById('prog-cat-select');
+  const prev = sel.value;
+  // Get all categories from both maestro (unscanned) and inventory (scanned)
+  const cats = [...new Set([
+    ...inventory.map(i => i.cat).filter(Boolean),
+    ...maestro.map(m => m.cat).filter(Boolean)
+  ])].sort();
+  sel.innerHTML = '<option value="">-- Todas las categorías --</option>';
+  cats.forEach(c => {
+    sel.innerHTML += `<option value="${escHtml(c)}" ${prev===c?'selected':''}>${escHtml(c)}</option>`;
+  });
+}
+
+function renderProgreso() {
+  const cat         = document.getElementById('prog-cat-select').value;
+
+  // Productos escaneados en inventory filtrados por cat
+  const escaneados  = inventory.filter(i => !cat || i.cat === cat);
+
+  // Productos del maestro que NO fueron escaneados (buscar por barcode o nombre)
+  const escCodes    = new Set(inventory.map(i => i.barcode).filter(Boolean));
+  const escNames    = new Set(inventory.map(i => i.name.toLowerCase().trim()));
+  const sinEscanear = maestro.filter(m => {
+    if (cat && m.cat !== cat) return false;
+    if (m.barcode && escCodes.has(m.barcode)) return false;
+    if (escNames.has((m.name||'').toLowerCase().trim())) return false;
+    return true;
+  });
+
+  const total    = escaneados.length + sinEscanear.length;
+  const pct      = total > 0 ? Math.round((escaneados.length / total) * 100) : 0;
+
+  // Update stats
+  document.getElementById('prog-pct').textContent        = pct + '%';
+  document.getElementById('prog-bar').style.width        = pct + '%';
+  document.getElementById('prog-escaneados').textContent = escaneados.length;
+  document.getElementById('prog-faltanesc').textContent  = sinEscanear.length;
+  document.getElementById('prog-total-cat').textContent  = total;
+
+  // Lista ESCANEADOS
+  const okEl = document.getElementById('prog-list-ok');
+  if (!escaneados.length) {
+    okEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px;">Ninguno aún</div>';
+  } else {
+    okEl.innerHTML = escaneados.map(i => `
+      <div class="prog-item prog-item-ok">
+        <div class="prog-item-name">${escHtml(i.name)}</div>
+        <div class="prog-item-meta">🔢 ${escHtml(i.barcode||'—')} · 📦 ${i.qty} un.</div>
+      </div>`).join('');
+  }
+
+  // Lista FALTAN ESCANEAR
+  const faltaEl = document.getElementById('prog-list-faltan');
+  if (!sinEscanear.length && maestro.length > 0) {
+    faltaEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--verde);font-size:12px;font-weight:700;">✅ ¡Categoría completa!</div>';
+  } else if (!sinEscanear.length) {
+    faltaEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px;">Importá el Maestro para ver los faltantes</div>';
+  } else {
+    faltaEl.innerHTML = sinEscanear.map(m => `
+      <div class="prog-item prog-item-falta" onclick="precargarDesdeProgreso('${escHtml(m.barcode||'')}','${escHtml(m.name||'')}','${escHtml(m.cat||'')}','${m.price||0}')">
+        <div class="prog-item-name">${escHtml(m.name)}</div>
+        <div class="prog-item-meta">🔢 ${escHtml(m.barcode||'—')} · Stock: ${m.qty||0} un. · Tocá para escanear</div>
+      </div>`).join('');
+  }
+}
+
+// Toca un producto faltante → va a la pestaña escanear con datos precargados
+function precargarDesdeProgreso(barcode, name, cat, price) {
+  switchTab('scan', document.querySelectorAll('.tab')[0]);
+  document.getElementById('inp-barcode').value = barcode;
+  document.getElementById('inp-name').value    = name;
+  document.getElementById('inp-cat').value     = cat;
+  document.getElementById('inp-price').value   = price;
+  document.getElementById('inp-qty').focus();
+  showToast(`📦 ${name} — ingresá la cantidad`);
+}
+
+// Exportar solo los productos escaneados en esta sesión
+function exportEscaneadosHoy() {
+  const cat = document.getElementById('prog-cat-select').value;
+  const lista = inventory.filter(i => !cat || i.cat === cat);
+  if (!lista.length) { showToast('No hay productos escaneados', 'warn'); return; }
+
+  const wb   = XLSX.utils.book_new();
+  const data = [
+    ['PRODUCTOS ESCANEADOS' + (cat ? ' — ' + cat : ' — TODAS LAS CATEGORÍAS')],
+    ['Generado por: ' + operator.name + ' · ' + nowStr()],
+    [],
+    ['#','Código','Nombre','Categoría','Cantidad','Precio','Valor','Operador','Fecha/Hora']
+  ];
+  lista.forEach((item, idx) => {
+    data.push([idx+1, item.barcode||'', item.name, item.cat||'',
+      item.qty, item.price||0, item.qty*(item.price||0),
+      item.operator||'', item.datetime||'']);
+  });
+  data.push([]);
+  data.push(['','','TOTAL','', lista.reduce((s,i)=>s+i.qty,0),'',
+    lista.reduce((s,i)=>s+i.qty*(i.price||0),0)]);
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [{wch:4},{wch:16},{wch:28},{wch:18},{wch:10},{wch:12},{wch:14},{wch:18},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Escaneados');
+
+  // Hoja de faltantes si hay maestro cargado
+  if (maestro.length > 0) {
+    const escCodes = new Set(inventory.map(i=>i.barcode).filter(Boolean));
+    const escNames = new Set(inventory.map(i=>i.name.toLowerCase().trim()));
+    const faltanData = [['#','Código','Nombre','Categoría','Stock Sistema']];
+    maestro.filter(m => {
+      if (cat && m.cat !== cat) return false;
+      if (m.barcode && escCodes.has(m.barcode)) return false;
+      if (escNames.has((m.name||'').toLowerCase().trim())) return false;
+      return true;
+    }).forEach((m, idx) => {
+      faltanData.push([idx+1, m.barcode||'', m.name, m.cat||'', m.qty||0]);
+    });
+    const ws2 = XLSX.utils.aoa_to_sheet(faltanData);
+    ws2['!cols'] = [{wch:4},{wch:16},{wch:28},{wch:18},{wch:14}];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Sin Escanear');
+  }
+
+  const fname = `Escaneados_${(cat||'TODO').replace(/\s/g,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
+  XLSX.writeFile(wb, fname);
+  showToast(`✅ ${fname} descargado`);
+}
+
+
 let sheetsUrl = localStorage.getItem('mm_sheets_url') || '';
 
 function showSheetsPanel() {
@@ -1320,6 +1549,7 @@ function switchTab(name, el) {
   document.getElementById('tab-'+name).classList.add('active');
   if (el) el.classList.add('active');
   if (scanning && name!=='scan') stopScanner();
+  if (name === 'progreso') { updateProgresoSelector(); renderProgreso(); }
 }
 
 // ══ INIT ══
