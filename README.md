@@ -1,4 +1,3 @@
-[inventario-scanner (3).html](https://github.com/user-attachments/files/28805601/inventario-scanner.3.html)
 <!DOCTYPE html>
 <html lang="es">
 <head>
