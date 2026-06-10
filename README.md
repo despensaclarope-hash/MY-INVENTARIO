@@ -1,4 +1,4 @@
-[inventario-scanner (2).html](https://github.com/user-attachments/files/28815775/inventario-scanner.2.html)
+[inventario-scanner (4).html](https://github.com/user-attachments/files/28816445/inventario-scanner.4.html)
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -1198,66 +1198,84 @@ function importXLSX(input) {
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
-      const wb   = XLSX.read(e.target.result, { type: 'array' });
-      // Try to find the PRODUCTOS sheet, else use first sheet
-      const sheetName = wb.SheetNames.includes('PRODUCTOS') ? 'PRODUCTOS' : wb.SheetNames[0];
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+
+      // Buscar la hoja correcta — prioridad: MAESTRO_PRODUCTOS, PRODUCTOS, primera hoja
+      const sheetName = wb.SheetNames.find(s =>
+        ['MAESTRO_PRODUCTOS','PRODUCTOS','MAESTRO'].includes(s.toUpperCase())
+      ) || wb.SheetNames[0];
       const ws   = wb.Sheets[sheetName];
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
-      // Find header row (look for 'nombre' or 'NOMBRE')
+      // Buscar fila de cabeceras (primeras 10 filas)
       let headerRow = -1;
       for (let i = 0; i < Math.min(rows.length, 10); i++) {
         const row = rows[i].map(c => String(c).toLowerCase().trim());
-        if (row.includes('nombre') || row.includes('nombre *')) { headerRow = i; break; }
+        // Acepta cabeceras del Maestro CLAROPE o de la plantilla de importación
+        if (row.some(c => ['nombre','nombre *','producto'].includes(c))) {
+          headerRow = i; break;
+        }
       }
       if (headerRow === -1) { showToast('❌ No se encontró la fila de cabeceras', 'error'); return; }
 
-      // Map column names to indices
+      // Mapear columnas — acepta nombres del Maestro CLAROPE Y de la plantilla
       const headers = rows[headerRow].map(c => String(c).toLowerCase().replace(/\s*\*/g,'').trim());
-      const col = name => headers.indexOf(name);
+      const col = (...names) => { for (const n of names) { const i = headers.indexOf(n); if (i !== -1) return i; } return -1; };
 
-      const iBarcode  = col('codigo_barras');
-      const iName     = col('nombre');
-      const iQty      = col('cantidad');
-      const iPrice    = col('precio');
-      const iCat      = col('categoria');
-      const iMin      = col('stock_minimo');
+      // Columnas — primero busca nombre de la plantilla, luego del Maestro CLAROPE
+      const iCod1    = col('codigo_barras',    'código_principal', 'codigo_principal');
+      const iCod2    = col('codigo_alternativo','código_alternativo');  // segundo código
+      const iName    = col('nombre',            'producto');
+      const iQty     = col('cantidad',          'stock_sistema');
+      const iPrice   = col('precio',            'precio_venta');
+      const iCost    = col('precio_costo');
+      const iCat     = col('categoria',         'rubro');
+      const iMin     = col('stock_minimo');
 
-      if (iName === -1 || iQty === -1) {
-        showToast('❌ Faltan columnas NOMBRE o CANTIDAD', 'error'); return;
-      }
+      if (iName === -1) { showToast('❌ No se encontró columna Nombre o Producto', 'error'); return; }
 
       let added = 0, updated = 0, skipped = 0;
       const dt = nowStr();
+      // Para el Maestro: empezar desde fila después del header (sin sub-header si es CLAROPE)
+      const isMaestroClaro = sheetName === 'MAESTRO_PRODUCTOS';
+      const dataStart = headerRow + (isMaestroClaro ? 1 : 2);
 
-      // Data rows start after header + possible sub-header
-      const dataStart = headerRow + 2; // skip sub-header row
+      // Construir maestro nuevo
+      const maestroImport = [];
 
       for (let i = dataStart; i < rows.length; i++) {
         const row  = rows[i];
         const name = String(row[iName] || '').trim();
         if (!name || name.toLowerCase().includes('ejemplo')) { skipped++; continue; }
 
-        const barcode  = iBarcode >= 0  ? String(row[iBarcode]  || '').trim() : '';
-        const qty      = parseInt(row[iQty])   || 0;
-        const price    = parseFloat(row[iPrice])|| 0;
-        const cat      = iCat >= 0   ? String(row[iCat]   || '').trim() : '';
-        const minStock = iMin >= 0   ? parseInt(row[iMin]) || 0 : 0;
+        const cod1     = iCod1 >= 0 ? String(row[iCod1] || '').trim() : '';
+        const cod2     = iCod2 >= 0 ? String(row[iCod2] || '').trim() : '';
+        const barcode  = cod1 || cod2; // usar el primero disponible
+        const qty      = parseInt(row[iQty])    || 0;
+        const price    = parseFloat(row[iPrice]) || 0;
+        const cost     = iCost >= 0 ? parseFloat(row[iCost]) || 0 : 0;
+        const cat      = iCat >= 0  ? String(row[iCat] || '').trim() : '';
+        const minStock = iMin >= 0  ? parseInt(row[iMin]) || 0 : 0;
 
-        // Check duplicate by barcode first, then by name
+        // Guardar en maestro con AMBOS códigos
+        maestroImport.push({ barcode: cod1, barcode2: cod2, name, cat, qty, price, cost });
+
+        // Buscar duplicado por cod1, cod2 o nombre
         let existing = null;
-        if (barcode) existing = inventory.find(p => p.barcode === barcode);
+        if (cod1) existing = inventory.find(p => p.barcode === cod1 || p.barcode2 === cod1);
+        if (!existing && cod2) existing = inventory.find(p => p.barcode === cod2 || p.barcode2 === cod2);
         if (!existing) existing = inventory.find(p => p.name.toLowerCase() === name.toLowerCase());
 
         if (existing) {
-          existing.qty         += qty;
-          existing.lastUpdate   = dt;
-          existing.lastOperator = operator.name;
+          // Solo actualizar si viene de escaneo, no sobreescribir con stock del sistema
           updated++;
         } else {
           inventory.push({
             id: Date.now() + i,
-            barcode, name, qty, price, cat, minStock,
+            barcode: cod1, barcode2: cod2,
+            name, qty: 0, // stock en app empieza en 0, el stock del sistema está en stockSistema
+            stockSistema: qty,
+            price, cost, cat, minStock,
             operator: operator.name,
             role:     operator.role,
             store:    operator.store || '',
@@ -1269,34 +1287,20 @@ function importXLSX(input) {
         }
       }
 
-      addAudit('system', `Importación: ${added} nuevos, ${updated} actualizados, ${skipped} omitidos`, null);
-
-      // Guardar todos los productos importados como maestro de referencia
-      const maestroImport = [];
-      for (let i = dataStart; i < rows.length; i++) {
-        const row  = rows[i];
-        const name = String(row[iName] || '').trim();
-        if (!name || name.toLowerCase().includes('ejemplo')) continue;
-        maestroImport.push({
-          barcode: iBarcode >= 0 ? String(row[iBarcode]||'').trim() : '',
-          name,
-          cat:     iCat >= 0 ? String(row[iCat]||'').trim() : '',
-          qty:     parseInt(row[iQty]) || 0,
-          price:   parseFloat(row[iPrice]) || 0,
-        });
-      }
+      // Guardar maestro con ambos códigos
       if (maestroImport.length > 0) {
         maestro = maestroImport;
         localStorage.setItem('mm_maestro', JSON.stringify(maestro));
       }
 
+      addAudit('system', `Importación ${sheetName}: ${added} productos, ${updated} ya existían, ${skipped} omitidos`, null);
       save();
-      showToast(`✅ ${added} agregados · ${updated} actualizados · ${skipped} omitidos`);
+      showToast(`✅ ${added} cargados · ${updated} ya existían · ${skipped} omitidos`);
       input.value = '';
 
     } catch(err) {
       console.error(err);
-      showToast('❌ Error al leer el archivo', 'error');
+      showToast('❌ Error al leer el archivo — ' + err.message, 'error');
     }
   };
   reader.readAsArrayBuffer(file);
@@ -1323,12 +1327,13 @@ function renderProgreso() {
   // Productos escaneados en inventory filtrados por cat
   const escaneados  = inventory.filter(i => !cat || i.cat === cat);
 
-  // Productos del maestro que NO fueron escaneados (buscar por barcode o nombre)
-  const escCodes    = new Set(inventory.map(i => i.barcode).filter(Boolean));
-  const escNames    = new Set(inventory.map(i => i.name.toLowerCase().trim()));
+  // Productos del maestro que NO fueron escaneados
+  const escCodes  = new Set(inventory.flatMap(i => [i.barcode, i.barcode2]).filter(Boolean));
+  const escNames  = new Set(inventory.map(i => i.name.toLowerCase().trim()));
   const sinEscanear = maestro.filter(m => {
     if (cat && m.cat !== cat) return false;
-    if (m.barcode && escCodes.has(m.barcode)) return false;
+    if (m.barcode  && escCodes.has(m.barcode))  return false;
+    if (m.barcode2 && escCodes.has(m.barcode2)) return false;
     if (escNames.has((m.name||'').toLowerCase().trim())) return false;
     return true;
   });
@@ -1577,12 +1582,30 @@ document.getElementById('inp-barcode').addEventListener('change', function() {
 });
 
 function lookupBarcode(code) {
-  const existing = inventory.find(i => i.barcode === code);
+  // Busca por código principal O código alternativo
+  const existing = inventory.find(i =>
+    (i.barcode  && i.barcode  === code) ||
+    (i.barcode2 && i.barcode2 === code)
+  );
   if (existing) {
     showFoundPanel(existing);
   } else {
-    dismissFound();
-    document.getElementById('inp-name').focus();
+    // También buscar en maestro para precargar datos
+    const enMaestro = maestro.find(m =>
+      (m.barcode  && m.barcode  === code) ||
+      (m.barcode2 && m.barcode2 === code)
+    );
+    if (enMaestro) {
+      // Precargar datos del maestro en el formulario
+      document.getElementById('inp-name').value  = enMaestro.name;
+      document.getElementById('inp-cat').value   = enMaestro.cat  || '';
+      document.getElementById('inp-price').value = enMaestro.price || '';
+      showToast(`📋 Producto del Maestro: ${enMaestro.name}`);
+      document.getElementById('inp-qty').focus();
+    } else {
+      dismissFound();
+      document.getElementById('inp-name').focus();
+    }
   }
 }
 
