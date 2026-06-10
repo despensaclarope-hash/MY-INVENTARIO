@@ -1,4 +1,4 @@
-[inventario-scanner (2).html](https://github.com/user-attachments/files/28803666/inventario-scanner.2.html)
+[inventario-scanner (3).html](https://github.com/user-attachments/files/28805601/inventario-scanner.3.html)
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>📦 Inventario MiniMarket</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
   :root {
     --verde: #00C853;
@@ -344,8 +344,8 @@
         </div>
       </div>
       <div id="scanner-viewport">
-        <video id="scanner-video" autoplay muted playsinline style="width:100%;max-height:260px;object-fit:cover;display:block;"></video>
-        <div class="scan-overlay">
+        <div id="scanner-reader"></div>
+        <div class="scan-overlay" id="scan-overlay-anim" style="pointer-events:none">
           <div class="scan-frame"><div class="scan-line"></div></div>
         </div>
       </div>
@@ -849,136 +849,83 @@ function focusManualBarcode() {
   document.getElementById('inp-barcode').scrollIntoView({ behavior:'smooth', block:'center' });
 }
 
-// ══ SCANNER (ZXing) ══
-let zxingReader = null;
+// ══ SCANNER (html5-qrcode — máxima precisión EAN-13) ══
+let html5Scanner = null;
 
 function toggleScanner() { scanning ? stopScanner() : startScanner(); }
 
-async function startScanner() {
-  const vp    = document.getElementById('scanner-viewport');
-  const video = document.getElementById('scanner-video');
+function startScanner() {
+  const vp = document.getElementById('scanner-viewport');
   vp.style.display = 'block';
 
-  try {
-    // Stop any existing stream
-    if (video.srcObject) {
-      video.srcObject.getTracks().forEach(t => t.stop());
-      video.srcObject = null;
-    }
+  // Limpiar div antes de iniciar
+  document.getElementById('scanner-reader').innerHTML = '';
 
-    // Get camera stream — prefer back camera, high resolution
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: 'environment' },
-        width:  { ideal: 1280 },
-        height: { ideal: 720 }
-      }
-    });
+  html5Scanner = new Html5Qrcode('scanner-reader', { verbose: false });
 
-    video.srcObject = stream;
-    await video.play();
+  const config = {
+    fps: 15,
+    qrbox: { width: 280, height: 120 },
+    aspectRatio: 1.7,
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.ITF,
+      Html5QrcodeSupportedFormats.QR_CODE,
+    ]
+  };
+
+  html5Scanner.start(
+    { facingMode: 'environment' },
+    config,
+    (decodedText) => {
+      // ✅ Lectura exitosa
+      stopScanner();
+      const code = decodedText.trim();
+      document.getElementById('inp-barcode').value = code;
+      if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+      showToast(`✅ Código: ${code}`);
+      lookupBarcode(code);
+    },
+    () => { /* frame sin código — ignorar */ }
+  ).then(() => {
     scanning = true;
     document.getElementById('btn-scan').innerHTML = '<span>⏹️</span> Detener Cámara';
     document.getElementById('btn-scan').className = 'btn btn-danger';
-
-    // Init ZXing reader with multiple formats
-    const hints = new Map();
-    const formats = [
-      ZXing.BarcodeFormat.EAN_13,
-      ZXing.BarcodeFormat.EAN_8,
-      ZXing.BarcodeFormat.CODE_128,
-      ZXing.BarcodeFormat.CODE_39,
-      ZXing.BarcodeFormat.UPC_A,
-      ZXing.BarcodeFormat.UPC_E,
-      ZXing.BarcodeFormat.ITF,
-      ZXing.BarcodeFormat.DATA_MATRIX,
-      ZXing.BarcodeFormat.QR_CODE
-    ];
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-    // Try harder — better accuracy
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-
-    zxingReader = new ZXing.MultiFormatReader();
-    zxingReader.setHints(hints);
-
-    decodeFrame(video);
-
-  } catch(err) {
+    // Ocultar overlay propio — html5-qrcode pone el suyo
+    document.getElementById('scan-overlay-anim').style.display = 'none';
+    // Estilos del visor
+    const readerEl = document.querySelector('#scanner-reader video');
+    if (readerEl) { readerEl.style.maxHeight = '260px'; readerEl.style.width = '100%'; }
+  }).catch(err => {
     console.error(err);
     vp.style.display = 'none';
     scanning = false;
-    if (err.name === 'NotAllowedError') {
+    if (String(err).includes('Permission') || String(err).includes('NotAllowed')) {
       showToast('❌ Permiso de cámara denegado — habilitalo en Chrome', 'error');
     } else {
       showToast('❌ No se pudo acceder a la cámara', 'error');
     }
-  }
-}
-
-// Canvas reutilizable para decodificar frames
-const _canvas = document.createElement('canvas');
-const _ctx    = _canvas.getContext('2d', { willReadFrequently: true });
-let   _lastCode = '';
-let   _sameCount = 0;
-
-function decodeFrame(video) {
-  if (!scanning) return;
-
-  if (video.readyState < video.HAVE_ENOUGH_DATA) {
-    requestAnimationFrame(() => decodeFrame(video));
-    return;
-  }
-
-  _canvas.width  = video.videoWidth  || 640;
-  _canvas.height = video.videoHeight || 480;
-  _ctx.drawImage(video, 0, 0, _canvas.width, _canvas.height);
-
-  try {
-    const luminance = new ZXing.HTMLCanvasElementLuminanceSource(_canvas);
-    const binary    = new ZXing.HybridBinarizer(luminance);
-    const bmp       = new ZXing.BinaryBitmap(binary);
-    const result    = zxingReader.decode(bmp);
-
-    if (result) {
-      const code = result.getText();
-      // Require same code read twice in a row to avoid false positives
-      if (code === _lastCode) {
-        _sameCount++;
-        if (_sameCount >= 2) {
-          // Confirmed! Stop scanning and process
-          stopScanner();
-          document.getElementById('inp-barcode').value = code;
-          if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
-          showToast(`✅ Código: ${code}`);
-          lookupBarcode(code);
-          _lastCode  = '';
-          _sameCount = 0;
-          return;
-        }
-      } else {
-        _lastCode  = code;
-        _sameCount = 1;
-      }
-    }
-  } catch(e) {
-    // NotFoundException es normal cuando no hay código en el frame — ignorar
-  }
-
-  requestAnimationFrame(() => decodeFrame(video));
+  });
 }
 
 function stopScanner() {
   scanning = false;
-  const video = document.getElementById('scanner-video');
-  if (video.srcObject) {
-    video.srcObject.getTracks().forEach(t => t.stop());
-    video.srcObject = null;
+  if (html5Scanner) {
+    html5Scanner.stop().catch(() => {}).finally(() => {
+      html5Scanner.clear();
+      html5Scanner = null;
+    });
   }
   document.getElementById('scanner-viewport').style.display = 'none';
+  document.getElementById('scan-overlay-anim').style.display = 'flex';
+  document.getElementById('scanner-reader').innerHTML = '';
   document.getElementById('btn-scan').innerHTML = '<span>📷</span> Activar Cámara';
   document.getElementById('btn-scan').className = 'btn btn-primary';
-  _lastCode  = '';
-  _sameCount = 0;
 }
 
 // ══ EXPORT XLSX ══
