@@ -1,4 +1,4 @@
-[inventario-scanner (1).html](https://github.com/user-attachments/files/28802348/inventario-scanner.1.html)
+[inventario-scanner (2).html](https://github.com/user-attachments/files/28803666/inventario-scanner.2.html)
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -496,6 +496,15 @@
   <div id="tab-export" class="section">
     <div class="session-badge" id="export-summary">Cargá productos para exportar</div>
     <div class="export-grid">
+      <div class="export-card" onclick="document.getElementById('import-file').click()">
+        <div class="export-icon">📥</div>
+        <div class="export-info">
+          <h3>Importar desde Excel</h3>
+          <p>Cargá la plantilla completada con tus productos</p>
+        </div>
+      </div>
+      <input type="file" id="import-file" accept=".xlsx,.xls" style="display:none" onchange="importXLSX(this)">
+
       <div class="export-card" onclick="exportXLSX()">
         <div class="export-icon">📊</div>
         <div class="export-info">
@@ -1077,7 +1086,98 @@ function copyText() {
   navigator.clipboard.writeText(txt).then(()=>showToast('✅ Copiado al portapapeles')).catch(()=>showToast('❌ Error al copiar','error'));
 }
 
-function updateExportSummary() {
+// ══ IMPORT XLSX ══
+function importXLSX(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb   = XLSX.read(e.target.result, { type: 'array' });
+      // Try to find the PRODUCTOS sheet, else use first sheet
+      const sheetName = wb.SheetNames.includes('PRODUCTOS') ? 'PRODUCTOS' : wb.SheetNames[0];
+      const ws   = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      // Find header row (look for 'nombre' or 'NOMBRE')
+      let headerRow = -1;
+      for (let i = 0; i < Math.min(rows.length, 10); i++) {
+        const row = rows[i].map(c => String(c).toLowerCase().trim());
+        if (row.includes('nombre') || row.includes('nombre *')) { headerRow = i; break; }
+      }
+      if (headerRow === -1) { showToast('❌ No se encontró la fila de cabeceras', 'error'); return; }
+
+      // Map column names to indices
+      const headers = rows[headerRow].map(c => String(c).toLowerCase().replace(/\s*\*/g,'').trim());
+      const col = name => headers.indexOf(name);
+
+      const iBarcode  = col('codigo_barras');
+      const iName     = col('nombre');
+      const iQty      = col('cantidad');
+      const iPrice    = col('precio');
+      const iCat      = col('categoria');
+      const iMin      = col('stock_minimo');
+
+      if (iName === -1 || iQty === -1) {
+        showToast('❌ Faltan columnas NOMBRE o CANTIDAD', 'error'); return;
+      }
+
+      let added = 0, updated = 0, skipped = 0;
+      const dt = nowStr();
+
+      // Data rows start after header + possible sub-header
+      const dataStart = headerRow + 2; // skip sub-header row
+
+      for (let i = dataStart; i < rows.length; i++) {
+        const row  = rows[i];
+        const name = String(row[iName] || '').trim();
+        if (!name || name.toLowerCase().includes('ejemplo')) { skipped++; continue; }
+
+        const barcode  = iBarcode >= 0  ? String(row[iBarcode]  || '').trim() : '';
+        const qty      = parseInt(row[iQty])   || 0;
+        const price    = parseFloat(row[iPrice])|| 0;
+        const cat      = iCat >= 0   ? String(row[iCat]   || '').trim() : '';
+        const minStock = iMin >= 0   ? parseInt(row[iMin]) || 0 : 0;
+
+        // Check duplicate by barcode first, then by name
+        let existing = null;
+        if (barcode) existing = inventory.find(p => p.barcode === barcode);
+        if (!existing) existing = inventory.find(p => p.name.toLowerCase() === name.toLowerCase());
+
+        if (existing) {
+          existing.qty         += qty;
+          existing.lastUpdate   = dt;
+          existing.lastOperator = operator.name;
+          updated++;
+        } else {
+          inventory.push({
+            id: Date.now() + i,
+            barcode, name, qty, price, cat, minStock,
+            operator: operator.name,
+            role:     operator.role,
+            store:    operator.store || '',
+            datetime: dt,
+            iso:      new Date().toISOString(),
+            lastUpdate: null, lastOperator: null
+          });
+          added++;
+        }
+      }
+
+      addAudit('system', `Importación: ${added} nuevos, ${updated} actualizados, ${skipped} omitidos`, null);
+      save();
+      showToast(`✅ ${added} agregados · ${updated} actualizados · ${skipped} omitidos`);
+      input.value = '';
+
+    } catch(err) {
+      console.error(err);
+      showToast('❌ Error al leer el archivo', 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+
   const val = inventory.reduce((s,i)=>s+i.qty*(i.price||0),0);
   document.getElementById('export-summary').textContent =
     `${inventory.length} productos · ${inventory.reduce((s,i)=>s+i.qty,0)} unidades · Valor: $${val.toLocaleString('es-AR',{minimumFractionDigits:0})}`;
