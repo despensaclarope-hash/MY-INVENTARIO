@@ -1,4 +1,4 @@
-[inventario-scanner (4).html](https://github.com/user-attachments/files/28816737/inventario-scanner.4.html)
+[inventario-scanner (6).html](https://github.com/user-attachments/files/28816857/inventario-scanner.6.html)
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -547,9 +547,12 @@
   <div id="tab-list" class="section">
     <div class="table-header">
       <h2>📋 Inventario</h2>
-      <div class="search-box">
-        <span style="color:var(--muted)">🔍</span>
-        <input id="search-input" type="text" placeholder="Buscar..." oninput="renderList()">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <div class="search-box">
+          <span style="color:var(--muted)">🔍</span>
+          <input id="search-input" type="text" placeholder="Buscar..." oninput="renderList()">
+        </div>
+        <button onclick="clearAll()" style="background:transparent;border:1px solid rgba(211,47,47,0.4);color:var(--rojo);padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap;transition:all 0.2s;" onmouseover="this.style.background='var(--rojo)';this.style.color='#fff'" onmouseout="this.style.background='transparent';this.style.color='var(--rojo)'">🗑️ Borrar todo</button>
       </div>
     </div>
     <div class="chips" id="category-chips">
@@ -982,12 +985,37 @@ function deleteItem(idx) {
 }
 
 function clearAll() {
-  if (!inventory.length) { showToast('El inventario ya está vacío', 'warn'); return; }
-  if (!confirm(`¿Borrar los ${inventory.length} productos del inventario?`)) return;
-  addAudit('system', `Inventario borrado completo (${inventory.length} productos)`, null);
-  inventory = [];
-  save();
-  showToast('🗑️ Inventario borrado');
+  if (!inventory.length && !maestro.length) { showToast('El inventario ya está vacío', 'warn'); return; }
+  const opciones = [
+    inventory.length ? `🗑️ Borrar inventario escaneado (${inventory.length} productos)` : null,
+    maestro.length   ? `📋 Borrar Maestro importado (${maestro.length} productos)` : null,
+    (inventory.length && maestro.length) ? '💥 Borrar TODO (inventario + maestro)' : null,
+  ].filter(Boolean);
+
+  const msg = opciones.join('\n') + '\n\n¿Confirmar? Escribí:\n1 = solo inventario\n2 = solo maestro\n3 = todo';
+  const resp = prompt(msg);
+  if (!resp) return;
+
+  if (resp === '1' && inventory.length) {
+    addAudit('system', `Inventario borrado completo (${inventory.length} productos)`, null);
+    inventory = [];
+    save();
+    showToast('🗑️ Inventario escaneado borrado');
+  } else if (resp === '2' && maestro.length) {
+    maestro = [];
+    localStorage.setItem('mm_maestro', JSON.stringify(maestro));
+    refreshAll();
+    showToast('📋 Maestro borrado');
+  } else if (resp === '3') {
+    addAudit('system', `TODO borrado: inventario (${inventory.length}) + maestro (${maestro.length})`, null);
+    inventory = [];
+    maestro   = [];
+    localStorage.setItem('mm_maestro', JSON.stringify(maestro));
+    save();
+    showToast('💥 Todo borrado');
+  } else {
+    showToast('Opción inválida — no se borró nada', 'warn');
+  }
 }
 
 function clearForm() {
@@ -1234,68 +1262,74 @@ function importXLSX(input) {
 
       if (iName === -1) { showToast('❌ No se encontró columna Nombre o Producto', 'error'); return; }
 
-      let added = 0, updated = 0, skipped = 0;
       const dt = nowStr();
-      // Para el Maestro: empezar desde fila después del header (sin sub-header si es CLAROPE)
-      const isMaestroClaro = sheetName === 'MAESTRO_PRODUCTOS';
-      const dataStart = headerRow + (isMaestroClaro ? 1 : 2);
-
-      // Construir maestro nuevo
+      const isMaestro  = sheetName === 'MAESTRO_PRODUCTOS' || sheetName === 'MAESTRO';
+      const dataStart  = headerRow + (isMaestro ? 1 : 2);
       const maestroImport = [];
+      let added = 0, updated = 0, skipped = 0;
 
       for (let i = dataStart; i < rows.length; i++) {
         const row  = rows[i];
         const name = String(row[iName] || '').trim();
         if (!name || name.toLowerCase().includes('ejemplo')) { skipped++; continue; }
 
-        const cod1     = iCod1 >= 0 ? String(row[iCod1] || '').trim() : '';
-        const cod2     = iCod2 >= 0 ? String(row[iCod2] || '').trim() : '';
-        const barcode  = cod1 || cod2; // usar el primero disponible
-        const qty      = parseInt(row[iQty])    || 0;
-        const price    = parseFloat(row[iPrice]) || 0;
-        const cost     = iCost >= 0 ? parseFloat(row[iCost]) || 0 : 0;
-        const cat      = iCat >= 0  ? String(row[iCat] || '').trim() : '';
-        const minStock = iMin >= 0  ? parseInt(row[iMin]) || 0 : 0;
+        const cod1  = iCod1 >= 0 ? String(row[iCod1] || '').trim() : '';
+        const cod2  = iCod2 >= 0 ? String(row[iCod2] || '').trim() : '';
+        const qty   = parseInt(row[iQty])    || 0;
+        const price = parseFloat(row[iPrice]) || 0;
+        const cost  = iCost >= 0 ? parseFloat(row[iCost]) || 0 : 0;
+        const cat   = iCat >= 0  ? String(row[iCat] || '').trim() : '';
+        const minStock = iMin >= 0 ? parseInt(row[iMin]) || 0 : 0;
 
-        // Guardar en maestro con AMBOS códigos
-        maestroImport.push({ barcode: cod1, barcode2: cod2, name, cat, qty, price, cost });
-
-        // Buscar duplicado por cod1, cod2 o nombre
-        let existing = null;
-        if (cod1) existing = inventory.find(p => p.barcode === cod1 || p.barcode2 === cod1);
-        if (!existing && cod2) existing = inventory.find(p => p.barcode === cod2 || p.barcode2 === cod2);
-        if (!existing) existing = inventory.find(p => p.name.toLowerCase() === name.toLowerCase());
-
-        if (existing) {
-          // Solo actualizar si viene de escaneo, no sobreescribir con stock del sistema
-          updated++;
-        } else {
-          inventory.push({
-            id: Date.now() + i,
-            barcode: cod1, barcode2: cod2,
-            name, qty: 0, // stock en app empieza en 0, el stock del sistema está en stockSistema
-            stockSistema: qty,
-            price, cost, cat, minStock,
-            operator: operator.name,
-            role:     operator.role,
-            store:    operator.store || '',
-            datetime: dt,
-            iso:      new Date().toISOString(),
-            lastUpdate: null, lastOperator: null
-          });
+        if (isMaestro) {
+          // ── MAESTRO: solo guardar como referencia, NO agregar al inventario ──
+          maestroImport.push({ barcode: cod1, barcode2: cod2, name, cat, qty, price, cost });
           added++;
+        } else {
+          // ── PLANTILLA DE IMPORTACIÓN: sí agregar al inventario ──
+          let existing = null;
+          if (cod1) existing = inventory.find(p => p.barcode === cod1 || p.barcode2 === cod1);
+          if (!existing && cod2) existing = inventory.find(p => p.barcode === cod2 || p.barcode2 === cod2);
+          if (!existing) existing = inventory.find(p => p.name.toLowerCase() === name.toLowerCase());
+
+          if (existing) {
+            existing.qty += qty;
+            existing.lastUpdate   = dt;
+            existing.lastOperator = operator.name;
+            updated++;
+          } else {
+            inventory.push({
+              id: Date.now() + i,
+              barcode: cod1, barcode2: cod2,
+              name, qty, stockSistema: qty,
+              price, cost, cat, minStock,
+              operator: operator.name,
+              role:     operator.role,
+              store:    operator.store || '',
+              datetime: dt,
+              iso:      new Date().toISOString(),
+              lastUpdate: null, lastOperator: null
+            });
+            added++;
+          }
         }
       }
 
-      // Guardar maestro con ambos códigos
+      // Guardar maestro si se importó MAESTRO_PRODUCTOS
       if (maestroImport.length > 0) {
         maestro = maestroImport;
         localStorage.setItem('mm_maestro', JSON.stringify(maestro));
       }
 
-      addAudit('system', `Importación ${sheetName}: ${added} productos, ${updated} ya existían, ${skipped} omitidos`, null);
-      save();
-      showToast(`✅ ${added} cargados · ${updated} ya existían · ${skipped} omitidos`);
+      if (isMaestro) {
+        addAudit('system', `Maestro importado: ${added} productos de referencia`, null);
+        save();
+        showToast(`✅ Maestro cargado: ${added} productos de referencia`);
+      } else {
+        addAudit('system', `Importación: ${added} nuevos, ${updated} actualizados, ${skipped} omitidos`, null);
+        save();
+        showToast(`✅ ${added} agregados · ${updated} actualizados · ${skipped} omitidos`);
+      }
       input.value = '';
 
     } catch(err) {
