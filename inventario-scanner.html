@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>📦 Inventario MiniMarket</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<style>
+  :root {
+    --verde: #00C853;
+    --verde-dark: #00962e;
+    --azul: #1565C0;
+    --rojo: #D32F2F;
+    --amarillo: #F9A825;
+    --bg: #0D1117;
+    --card: #161B22;
+    --card2: #1F2937;
+    --border: #30363D;
+    --text: #E6EDF3;
+    --muted: #8B949E;
+    --font: 'Segoe UI', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; overflow-x: hidden; }
+
+  /* ── LOGIN MODAL ── */
+  #login-screen {
+    position: fixed; inset: 0; background: var(--bg); z-index: 9999;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .login-box {
+    background: var(--card); border: 1px solid var(--border); border-radius: 20px;
+    padding: 32px 24px; width: 100%; max-width: 360px; text-align: center;
+  }
+  .login-logo { font-size: 52px; margin-bottom: 8px; }
+  .login-title { font-size: 22px; font-weight: 800; color: var(--verde); margin-bottom: 4px; }
+  .login-sub { font-size: 13px; color: var(--muted); margin-bottom: 28px; }
+  .login-field { margin-bottom: 16px; text-align: left; }
+  .login-field label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .login-field input, .login-field select {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text); padding: 12px 14px; font-size: 15px;
+    font-family: var(--font); transition: border-color 0.2s;
+  }
+  .login-field input:focus, .login-field select:focus { outline: none; border-color: var(--verde); box-shadow: 0 0 0 3px rgba(0,200,83,0.15); }
+  .login-field select option { background: var(--card); }
+  .btn-login {
+    width: 100%; background: var(--verde); color: #000; border: none; border-radius: 12px;
+    padding: 14px; font-size: 15px; font-weight: 800; cursor: pointer; margin-top: 8px;
+    font-family: var(--font); transition: background 0.2s; letter-spacing: 0.3px;
+  }
+  .btn-login:hover { background: var(--verde-dark); }
+  .login-note { font-size: 11px; color: var(--muted); margin-top: 14px; }
+
+  /* ── OPERATOR BAR ── */
+  .operator-bar {
+    background: rgba(0,200,83,0.08); border-bottom: 1px solid rgba(0,200,83,0.2);
+    padding: 8px 16px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .operator-info { display: flex; align-items: center; gap: 8px; }
+  .operator-avatar {
+    width: 28px; height: 28px; border-radius: 50%; background: var(--verde);
+    color: #000; font-weight: 800; font-size: 12px; display: flex; align-items: center; justify-content: center;
+  }
+  .operator-name { font-size: 13px; font-weight: 700; color: var(--verde); }
+  .operator-role { font-size: 10px; color: var(--muted); }
+  .btn-logout {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer;
+    font-family: var(--font); transition: all 0.2s;
+  }
+  .btn-logout:hover { border-color: var(--rojo); color: var(--rojo); }
+
+  /* ── HEADER ── */
+  header {
+    background: linear-gradient(135deg, #0D1117 0%, #161B22 100%);
+    border-bottom: 1px solid var(--border); padding: 14px 20px;
+    display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-size: 26px; }
+  .header-text h1 { font-size: 17px; font-weight: 700; color: var(--verde); letter-spacing: -0.3px; }
+  .header-text p  { font-size: 11px; color: var(--muted); }
+
+  /* ── STATS ── */
+  .stats-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
+  .stat { background: var(--card); padding: 10px; text-align: center; }
+  .stat-num { font-size: 20px; font-weight: 800; color: var(--verde); line-height: 1; }
+  .stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ── TABS ── */
+  .tabs { display: flex; background: var(--card); border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .tab { flex: 1; padding: 13px 8px; border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; font-family: var(--font); font-weight: 600; text-align: center; white-space: nowrap; transition: all 0.2s; border-bottom: 2px solid transparent; }
+  .tab.active { color: var(--verde); border-bottom-color: var(--verde); }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  /* ── SECTIONS ── */
+  .section { display: none; padding: 16px; }
+  .section.active { display: block; }
+
+  /* ── SCANNER ── */
+  .scanner-container { background: var(--card); border-radius: 16px; border: 1px solid var(--border); overflow: hidden; margin-bottom: 16px; }
+  .scanner-header { padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; }
+  .scanner-title { font-weight: 700; font-size: 14px; }
+  .scanner-subtitle { font-size: 11px; color: var(--muted); }
+  #scanner-viewport { position: relative; width: 100%; background: #000; display: none; overflow: hidden; }
+  #scanner-viewport video, #scanner-viewport canvas { width: 100% !important; max-height: 240px; object-fit: cover; }
+  .scan-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .scan-frame { width: 70%; height: 110px; border: 2px solid var(--verde); border-radius: 8px; box-shadow: 0 0 0 2000px rgba(0,0,0,0.45); position: relative; }
+  .scan-line { position: absolute; top: 50%; left: 0; right: 0; height: 2px; background: var(--verde); animation: scan 1.5s ease-in-out infinite; box-shadow: 0 0 8px var(--verde); }
+  @keyframes scan { 0%,100% { top: 10%; opacity: 1; } 50% { top: 90%; opacity: 0.7; } }
+  .scanner-controls { padding: 14px; display: flex; gap: 10px; }
+
+  /* ── TIMESTAMP DISPLAY ── */
+  .timestamp-display {
+    background: rgba(0,200,83,0.08); border: 1px solid rgba(0,200,83,0.25);
+    border-radius: 10px; padding: 10px 14px; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .ts-icon { font-size: 20px; }
+  .ts-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .ts-value { font-size: 14px; font-weight: 700; color: var(--verde); font-family: monospace; }
+
+  /* ── BUTTONS ── */
+  .btn { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 16px; border-radius: 10px; border: none; font-family: var(--font); font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; flex: 1; }
+  .btn-primary   { background: var(--verde); color: #000; }
+  .btn-primary:hover { background: var(--verde-dark); }
+  .btn-secondary { background: var(--card2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--verde); color: var(--verde); }
+  .btn-danger    { background: var(--rojo); color: #fff; }
+  .btn-warning   { background: var(--amarillo); color: #000; }
+  .btn:active    { transform: scale(0.97); }
+
+  /* ── INPUTS ── */
+  .input-card { background: var(--card); border-radius: 16px; border: 1px solid var(--border); padding: 18px; margin-bottom: 16px; }
+  .input-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 14px; color: var(--verde); }
+  .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .input-full { grid-column: 1 / -1; }
+  label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.4px; }
+  input, select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px 12px; font-size: 14px; font-family: var(--font); transition: border-color 0.2s; -webkit-appearance: none; }
+  input:focus, select:focus { outline: none; border-color: var(--verde); box-shadow: 0 0 0 2px rgba(0,200,83,0.15); }
+  input::placeholder { color: var(--muted); }
+  select option { background: var(--card); }
+  input[readonly] { color: var(--verde); opacity: 0.8; cursor: default; }
+
+  /* ── TOAST ── */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--card2); border: 1px solid var(--verde); border-radius: 12px; padding: 12px 20px; font-size: 13px; font-weight: 600; color: var(--verde); z-index: 9999; transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1); white-space: nowrap; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+  .toast.show  { transform: translateX(-50%) translateY(0); }
+  .toast.error { border-color: var(--rojo); color: var(--rojo); }
+  .toast.warn  { border-color: var(--amarillo); color: var(--amarillo); }
+
+  /* ── LIST ── */
+  .table-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }
+  .table-header h2 { font-size: 16px; font-weight: 700; }
+  .search-box { display: flex; align-items: center; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; gap: 8px; flex: 1; max-width: 280px; }
+  .search-box input { background: transparent; border: none; padding: 0; font-size: 13px; }
+  .search-box input:focus { outline: none; box-shadow: none; border: none; }
+  .items-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .item-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; transition: border-color 0.2s; animation: slideIn 0.2s ease; }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+  .item-card:hover { border-color: var(--verde); }
+  .item-name { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .item-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+  .badge { font-size: 10px; padding: 2px 7px; border-radius: 20px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
+  .badge-green  { background: rgba(0,200,83,0.15); color: var(--verde); }
+  .badge-blue   { background: rgba(21,101,192,0.2); color: #64B5F6; }
+  .badge-orange { background: rgba(249,168,37,0.15); color: var(--amarillo); }
+  .badge-purple { background: rgba(156,39,176,0.2); color: #CE93D8; }
+  .badge-muted  { background: rgba(139,148,158,0.15); color: var(--muted); }
+
+  .item-audit { font-size: 10px; color: var(--muted); margin-top: 5px; display: flex; flex-direction: column; gap: 1px; }
+  .item-audit span { display: flex; align-items: center; gap: 4px; }
+  .item-barcode { font-size: 10px; color: var(--muted); font-family: monospace; margin-top: 3px; }
+
+  .item-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  .item-qty { display: flex; align-items: center; gap: 6px; background: var(--bg); border-radius: 8px; padding: 4px 8px; border: 1px solid var(--border); }
+  .qty-btn { background: var(--card2); border: 1px solid var(--border); color: var(--text); width: 24px; height: 24px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .qty-btn:hover { background: var(--verde); color: #000; border-color: var(--verde); }
+  .qty-val { font-size: 15px; font-weight: 800; min-width: 28px; text-align: center; }
+  .del-btn { background: transparent; border: 1px solid rgba(211,47,47,0.3); color: var(--rojo); padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.15s; }
+  .del-btn:hover { background: var(--rojo); color: #fff; }
+
+  /* ── EXPORT ── */
+  .export-grid { display: grid; gap: 12px; }
+  .export-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; display: flex; align-items: center; gap: 14px; cursor: pointer; transition: all 0.2s; }
+  .export-card:hover { border-color: var(--verde); background: var(--card2); }
+  .export-icon { font-size: 30px; }
+  .export-info h3 { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+  .export-info p  { font-size: 12px; color: var(--muted); }
+  .session-badge { background: rgba(0,200,83,0.1); border: 1px solid rgba(0,200,83,0.3); border-radius: 8px; padding: 8px 12px; font-size: 11px; color: var(--verde); text-align: center; margin-bottom: 14px; }
+
+  /* ── CHIPS ── */
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--card); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s; }
+  .chip.active, .chip:hover { background: var(--verde); color: #000; border-color: var(--verde); }
+
+  /* ── ALERTS ── */
+  .alert-bar { display: none; background: rgba(249,168,37,0.1); border: 1px solid var(--amarillo); border-radius: 10px; padding: 11px 14px; margin-bottom: 14px; font-size: 12px; color: var(--amarillo); font-weight: 600; gap: 8px; align-items: center; }
+  .alert-bar.show { display: flex; }
+
+  /* ── AUDIT LOG ── */
+  .audit-entry { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start; }
+  .audit-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--verde); margin-top: 5px; flex-shrink: 0; }
+  .audit-dot.update { background: var(--amarillo); }
+  .audit-dot.delete { background: var(--rojo); }
+  .audit-main { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .audit-meta { font-size: 11px; color: var(--muted); }
+
+  .empty { text-align: center; padding: 44px 20px; color: var(--muted); }
+  .empty-icon { font-size: 44px; margin-bottom: 10px; }
+  .empty h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+  .empty p  { font-size: 13px; }
+
+  /* ── FOUND PRODUCT PANEL ── */
+  #found-panel {
+    display: none;
+    background: var(--card);
+    border: 2px solid var(--verde);
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 14px;
+    animation: popIn 0.25s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  @keyframes popIn { from { opacity:0; transform:scale(0.95); } to { opacity:1; transform:scale(1); } }
+  #found-panel.visible { display: block; }
+  .found-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .found-icon { font-size: 28px; }
+  .found-title { font-size: 15px; font-weight: 800; color: var(--verde); }
+  .found-sub   { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .found-info  { background: var(--bg); border-radius: 10px; padding: 12px; margin-bottom: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .found-field label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; }
+  .found-field .val  { font-size: 14px; font-weight: 700; color: var(--text); margin-top: 2px; }
+  .found-field .val.green { color: var(--verde); font-size: 18px; }
+  .found-qty-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .found-qty-row label { font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+  .found-qty-row input { flex: 1; font-size: 18px; font-weight: 800; text-align: center; padding: 10px; border-radius: 10px; background: var(--bg); border: 2px solid var(--verde); color: var(--verde); }
+  .found-qty-row input:focus { outline: none; box-shadow: 0 0 0 3px rgba(0,200,83,0.2); }
+  .found-actions { display: flex; gap: 10px; }
+  .found-divider { border: none; border-top: 1px solid var(--border); margin: 14px 0 10px; }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ══════════ LOGIN SCREEN ══════════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">📦</div>
+    <div class="login-title">Inventario MiniMarket</div>
+    <div class="login-sub">Identificate para comenzar el inventario</div>
+
+    <div class="login-field">
+      <label>👤 Tu nombre completo</label>
+      <input id="login-name" type="text" placeholder="Ej: María González" autocomplete="name">
+    </div>
+    <div class="login-field">
+      <label>🏷️ Tu rol</label>
+      <select id="login-role">
+        <option value="Operador/a">Operador/a</option>
+        <option value="Encargado/a">Encargado/a</option>
+        <option value="Supervisor/a">Supervisor/a</option>
+        <option value="Dueño/a">Dueño/a</option>
+        <option value="Repositor/a">Repositor/a</option>
+      </select>
+    </div>
+    <div class="login-field">
+      <label>🏪 Nombre del local (opcional)</label>
+      <input id="login-store" type="text" placeholder="Ej: MiniMarket El Sol">
+    </div>
+
+    <button class="btn-login" onclick="doLogin()">✅ Ingresar al sistema</button>
+    <div class="login-note">Los datos quedan guardados en este dispositivo</div>
+  </div>
+</div>
+
+<!-- ══════════ APP ══════════ -->
+<div id="app" style="display:none">
+
+  <!-- Operator bar -->
+  <div class="operator-bar">
+    <div class="operator-info">
+      <div class="operator-avatar" id="op-avatar">?</div>
+      <div>
+        <div class="operator-name" id="op-name">Operador</div>
+        <div class="operator-role" id="op-role">Rol · Local</div>
+      </div>
+    </div>
+    <button class="btn-logout" onclick="doLogout()">⇤ Salir</button>
+  </div>
+
+  <header>
+    <div class="logo">📦</div>
+    <div class="header-text">
+      <h1>Inventario MiniMarket</h1>
+      <p id="session-info">Sesión activa</p>
+    </div>
+  </header>
+
+  <div class="stats-bar">
+    <div class="stat">
+      <div class="stat-num" id="total-items">0</div>
+      <div class="stat-label">Productos</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num" id="total-units">0</div>
+      <div class="stat-label">Unidades</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num" id="total-value">$0</div>
+      <div class="stat-label">Valor total</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('scan',this)">📷 Escanear</button>
+    <button class="tab" onclick="switchTab('list',this)">📋 Inventario</button>
+    <button class="tab" onclick="switchTab('audit',this)">📝 Auditoría</button>
+    <button class="tab" onclick="switchTab('export',this)">💾 Exportar</button>
+  </div>
+
+  <!-- ══════ SCAN ══════ -->
+  <div id="tab-scan" class="section active">
+
+    <!-- Timestamp live -->
+    <div class="timestamp-display">
+      <div class="ts-icon">🕐</div>
+      <div>
+        <div class="ts-label">Fecha y hora actual</div>
+        <div class="ts-value" id="live-clock">--</div>
+      </div>
+    </div>
+
+    <div class="scanner-container">
+      <div class="scanner-header">
+        <div>
+          <div class="scanner-title">📷 Escáner de Códigos</div>
+          <div class="scanner-subtitle">Apuntá la cámara al código de barras</div>
+        </div>
+      </div>
+      <div id="scanner-viewport">
+        <div class="scan-overlay">
+          <div class="scan-frame"><div class="scan-line"></div></div>
+        </div>
+      </div>
+      <div class="scanner-controls">
+        <button class="btn btn-primary" id="btn-scan" onclick="toggleScanner()">
+          <span>📷</span> Activar Cámara
+        </button>
+        <button class="btn btn-secondary" onclick="focusManualBarcode()">
+          <span>⌨️</span> Manual
+        </button>
+      </div>
+    </div>
+
+    <!-- ── PANEL: PRODUCTO ENCONTRADO ── -->
+    <div id="found-panel">
+      <div class="found-header">
+        <div class="found-icon">📦</div>
+        <div>
+          <div class="found-title" id="found-name">Producto encontrado</div>
+          <div class="found-sub">✅ Ya existe en el inventario — solo actualizá la cantidad</div>
+        </div>
+      </div>
+      <div class="found-info">
+        <div class="found-field">
+          <label>Categoría</label>
+          <div class="val" id="found-cat">—</div>
+        </div>
+        <div class="found-field">
+          <label>Precio</label>
+          <div class="val" id="found-price">—</div>
+        </div>
+        <div class="found-field">
+          <label>Stock actual</label>
+          <div class="val green" id="found-qty">—</div>
+        </div>
+        <div class="found-field">
+          <label>Cargado por</label>
+          <div class="val" id="found-op" style="font-size:12px">—</div>
+        </div>
+      </div>
+      <div class="found-qty-row">
+        <label>➕ Agregar cantidad:</label>
+        <input id="found-add-qty" type="number" value="1" min="1" max="9999" inputmode="numeric">
+      </div>
+      <div class="found-actions">
+        <button class="btn btn-primary" onclick="confirmFoundProduct()" style="flex:2">
+          <span>✅</span> Confirmar y agregar
+        </button>
+        <button class="btn btn-secondary" onclick="dismissFound()" style="flex:1">
+          <span>✖️</span> Cancelar
+        </button>
+      </div>
+      <hr class="found-divider">
+      <div style="font-size:11px; color:var(--muted); text-align:center;">
+        ¿Es un producto diferente con el mismo código? <span onclick="dismissFound(true)" style="color:var(--verde);cursor:pointer;font-weight:700;text-decoration:underline;">Cargar como nuevo</span>
+      </div>
+    </div>
+
+    <div class="input-card">
+      <h3>✏️ Datos del Producto</h3>
+      <div class="input-grid">
+        <div class="input-full">
+          <label>Código de Barras</label>
+          <input id="inp-barcode" type="text" placeholder="Escaneá o escribí el código" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="input-full">
+          <label>Nombre del Producto *</label>
+          <input id="inp-name" type="text" placeholder="Ej: Coca-Cola 500ml" autocomplete="off">
+        </div>
+        <div>
+          <label>Cantidad</label>
+          <input id="inp-qty" type="number" value="1" min="1" max="9999">
+        </div>
+        <div>
+          <label>Precio ($)</label>
+          <input id="inp-price" type="number" placeholder="0.00" min="0" step="0.01">
+        </div>
+        <div>
+          <label>Categoría</label>
+          <select id="inp-cat">
+            <option value="">Sin categoría</option>
+            <option>Bebidas</option>
+            <option>Lácteos</option>
+            <option>Almacén</option>
+            <option>Limpieza</option>
+            <option>Snacks</option>
+            <option>Panificados</option>
+            <option>Higiene personal</option>
+            <option>Congelados</option>
+            <option>Frutas y Verduras</option>
+            <option>Carnes</option>
+            <option>Otro</option>
+          </select>
+        </div>
+        <div>
+          <label>Stock mínimo</label>
+          <input id="inp-min" type="number" placeholder="5" min="0">
+        </div>
+        <div>
+          <label>👤 Cargado por</label>
+          <input id="inp-operator" type="text" readonly>
+        </div>
+        <div>
+          <label>🕐 Fecha y Hora</label>
+          <input id="inp-datetime" type="text" readonly>
+        </div>
+      </div>
+      <div style="margin-top:14px; display:flex; gap:10px;">
+        <button class="btn btn-primary" onclick="addProduct()" style="flex:2">
+          <span>➕</span> Agregar al Inventario
+        </button>
+        <button class="btn btn-secondary" onclick="clearForm()" style="flex:1">
+          <span>🗑️</span> Limpiar
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══════ LIST ══════ -->
+  <div id="tab-list" class="section">
+    <div class="table-header">
+      <h2>📋 Inventario</h2>
+      <div class="search-box">
+        <span style="color:var(--muted)">🔍</span>
+        <input id="search-input" type="text" placeholder="Buscar..." oninput="renderList()">
+      </div>
+    </div>
+    <div class="chips" id="category-chips">
+      <div class="chip active" onclick="filterCat(this,'')">Todos</div>
+    </div>
+    <div id="low-stock-alert" class="alert-bar">
+      ⚠️ <span id="low-stock-msg"></span>
+    </div>
+    <div id="items-list" class="items-list"></div>
+  </div>
+
+  <!-- ══════ AUDIT ══════ -->
+  <div id="tab-audit" class="section">
+    <div class="table-header">
+      <h2>📝 Registro de Auditoría</h2>
+      <button onclick="clearAudit()" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:7px;font-size:11px;cursor:pointer;font-family:var(--font);">Limpiar log</button>
+    </div>
+    <div id="audit-list" class="items-list"></div>
+  </div>
+
+  <!-- ══════ EXPORT ══════ -->
+  <div id="tab-export" class="section">
+    <div class="session-badge" id="export-summary">Cargá productos para exportar</div>
+    <div class="export-grid">
+      <div class="export-card" onclick="exportXLSX()">
+        <div class="export-icon">📊</div>
+        <div class="export-info">
+          <h3>Exportar a Excel (.xlsx)</h3>
+          <p>Incluye inventario, auditoría y resumen por categoría</p>
+        </div>
+      </div>
+      <div class="export-card" onclick="exportCSV()">
+        <div class="export-icon">📄</div>
+        <div class="export-info">
+          <h3>Exportar a CSV</h3>
+          <p>Compatible con Google Sheets y cualquier programa</p>
+        </div>
+      </div>
+      <div class="export-card" onclick="copyText()">
+        <div class="export-icon">📋</div>
+        <div class="export-info">
+          <h3>Copiar resumen</h3>
+          <p>Para pegar en WhatsApp, email o notas</p>
+        </div>
+      </div>
+      <div class="export-card" onclick="clearAll()">
+        <div class="export-icon">🗑️</div>
+        <div class="export-info" style="color:var(--rojo)">
+          <h3 style="color:var(--rojo)">Borrar todo el inventario</h3>
+          <p style="color:var(--muted)">Empezar desde cero (mantiene auditoría)</p>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:18px; padding:16px; background:var(--card); border-radius:12px; border:1px solid var(--border);">
+      <h3 style="font-size:12px; color:var(--muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:0.5px;">📱 Cómo ver en la PC</h3>
+      <ol style="font-size:12px; color:var(--muted); line-height:2.2; padding-left:18px;">
+        <li>Exportá el archivo <strong style="color:var(--text)">.xlsx</strong> desde el celular</li>
+        <li>Compartilo por WhatsApp, email o Google Drive</li>
+        <li>Abrilo en Excel desde la PC</li>
+        <li>Verás 3 hojas: Inventario, Auditoría y Por Categoría</li>
+      </ol>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══ STATE ══
+let inventory  = JSON.parse(localStorage.getItem('mm_inv')   || '[]');
+let auditLog   = JSON.parse(localStorage.getItem('mm_audit') || '[]');
+let operator   = JSON.parse(localStorage.getItem('mm_op')    || 'null');
+let scanning   = false;
+let currentFilter = '';
+
+// ══ HELPERS ══
+function nowStr() {
+  return new Date().toLocaleString('es-AR', {
+    day:'2-digit', month:'2-digit', year:'numeric',
+    hour:'2-digit', minute:'2-digit', second:'2-digit'
+  });
+}
+function nowISO() { return new Date().toISOString(); }
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ══ LOGIN ══
+function doLogin() {
+  const name  = document.getElementById('login-name').value.trim();
+  const role  = document.getElementById('login-role').value;
+  const store = document.getElementById('login-store').value.trim();
+  if (!name) { showToast('⚠️ Ingresá tu nombre', 'warn'); document.getElementById('login-name').focus(); return; }
+  operator = { name, role, store, loginAt: nowStr() };
+  localStorage.setItem('mm_op', JSON.stringify(operator));
+  startApp();
+  addAudit('login', `Inicio de sesión — ${role}`, null, 'system');
+}
+
+function doLogout() {
+  if (!confirm('¿Cerrar sesión?')) return;
+  addAudit('logout', 'Cierre de sesión', null, 'system');
+  operator = null;
+  localStorage.removeItem('mm_op');
+  if (scanning) stopScanner();
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('login-name').value = '';
+}
+
+function startApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  // operator bar
+  document.getElementById('op-avatar').textContent = operator.name.charAt(0).toUpperCase();
+  document.getElementById('op-name').textContent   = operator.name;
+  document.getElementById('op-role').textContent   = operator.role + (operator.store ? ' · ' + operator.store : '');
+  // form fields
+  document.getElementById('inp-operator').value  = operator.name;
+  document.getElementById('inp-datetime').value  = nowStr();
+  refreshAll();
+  startClock();
+}
+
+// ══ CLOCK ══
+function startClock() {
+  function tick() {
+    const s = nowStr();
+    document.getElementById('live-clock').textContent = s;
+    document.getElementById('inp-datetime').value = s;
+    document.getElementById('session-info').textContent = s;
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
+// ══ SAVE / REFRESH ══
+function save() {
+  localStorage.setItem('mm_inv',   JSON.stringify(inventory));
+  localStorage.setItem('mm_audit', JSON.stringify(auditLog));
+  refreshAll();
+}
+
+function refreshAll() {
+  updateStats();
+  renderList();
+  renderAudit();
+  updateExportSummary();
+  updateCategoryChips();
+  checkLowStock();
+}
+
+// ══ AUDIT LOG ══
+function addAudit(type, desc, product, action) {
+  auditLog.unshift({
+    id: Date.now(),
+    type,   // 'add','update','delete','login','logout','system'
+    desc,
+    product: product || null,
+    operator: operator ? operator.name : 'Sistema',
+    role: operator ? operator.role : '',
+    datetime: nowStr(),
+    iso: nowISO()
+  });
+  if (auditLog.length > 500) auditLog = auditLog.slice(0, 500);
+  localStorage.setItem('mm_audit', JSON.stringify(auditLog));
+}
+
+function renderAudit() {
+  const container = document.getElementById('audit-list');
+  if (!auditLog.length) {
+    container.innerHTML = `<div class="empty"><div class="empty-icon">📝</div><h3>Sin registros aún</h3><p>Cada acción queda registrada aquí</p></div>`;
+    return;
+  }
+  const typeIcon = { add:'➕', update:'✏️', delete:'🗑️', login:'🔑', logout:'🔒', system:'⚙️' };
+  const dotClass = { add:'', update:'update', delete:'delete', login:'', logout:'', system:'' };
+  container.innerHTML = auditLog.slice(0, 100).map(e => `
+    <div class="audit-entry">
+      <div class="audit-dot ${dotClass[e.type]||''}"></div>
+      <div style="flex:1">
+        <div class="audit-main">${typeIcon[e.type]||'•'} ${escHtml(e.desc)}</div>
+        <div class="audit-meta">
+          👤 ${escHtml(e.operator)}${e.role ? ' · ' + escHtml(e.role) : ''}
+          &nbsp;·&nbsp; 🕐 ${escHtml(e.datetime)}
+          ${e.product ? `&nbsp;·&nbsp; 📦 ${escHtml(e.product)}` : ''}
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function clearAudit() {
+  if (!confirm('¿Borrar el registro de auditoría?')) return;
+  auditLog = [];
+  localStorage.setItem('mm_audit', JSON.stringify(auditLog));
+  renderAudit();
+  showToast('🗑️ Auditoría borrada');
+}
+
+// ══ STATS ══
+function updateStats() {
+  document.getElementById('total-items').textContent = inventory.length;
+  const units = inventory.reduce((s,i) => s + (i.qty||0), 0);
+  const value = inventory.reduce((s,i) => s + ((i.qty||0)*(i.price||0)), 0);
+  document.getElementById('total-units').textContent = units;
+  document.getElementById('total-value').textContent = '$' + value.toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0});
+}
+
+// ══ CATEGORY CHIPS ══
+function updateCategoryChips() {
+  const cats = [...new Set(inventory.map(i => i.cat).filter(Boolean))];
+  const container = document.getElementById('category-chips');
+  container.innerHTML = `<div class="chip ${currentFilter===''?'active':''}" onclick="filterCat(this,'')">Todos</div>`;
+  cats.forEach(c => {
+    container.innerHTML += `<div class="chip ${currentFilter===c?'active':''}" onclick="filterCat(this,'${escHtml(c)}')">${escHtml(c)}</div>`;
+  });
+}
+
+function filterCat(el, cat) {
+  currentFilter = cat;
+  document.querySelectorAll('#category-chips .chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderList();
+}
+
+// ══ LOW STOCK ══
+function checkLowStock() {
+  const low = inventory.filter(i => i.minStock > 0 && i.qty <= i.minStock);
+  const el = document.getElementById('low-stock-alert');
+  if (low.length > 0) {
+    el.classList.add('show');
+    document.getElementById('low-stock-msg').textContent = `${low.length} producto(s) con stock bajo: ${low.map(i=>i.name).join(', ')}`;
+  } else { el.classList.remove('show'); }
+}
+
+// ══ RENDER LIST ══
+function renderList() {
+  const q = (document.getElementById('search-input').value||'').toLowerCase();
+  let list = inventory.filter(i => {
+    const mSearch = !q || i.name.toLowerCase().includes(q) || (i.barcode||'').includes(q) || (i.operator||'').toLowerCase().includes(q);
+    const mCat    = !currentFilter || i.cat === currentFilter;
+    return mSearch && mCat;
+  });
+
+  const container = document.getElementById('items-list');
+  if (!list.length) {
+    container.innerHTML = `<div class="empty"><div class="empty-icon">${inventory.length===0?'📦':'🔍'}</div><h3>${inventory.length===0?'Sin productos aún':'Sin resultados'}</h3><p>${inventory.length===0?'Escaneá o agregá productos':'Probá otro término'}</p></div>`;
+    return;
+  }
+
+  container.innerHTML = list.map(item => {
+    const realIdx = inventory.findIndex(i => i.id === item.id);
+    const isLow = item.minStock > 0 && item.qty <= item.minStock;
+    return `
+    <div class="item-card">
+      <div style="min-width:0">
+        <div class="item-name">${escHtml(item.name)}</div>
+        <div class="item-meta">
+          ${item.cat   ? `<span class="badge badge-blue">🏷️ ${escHtml(item.cat)}</span>` : ''}
+          ${item.price ? `<span class="badge badge-green">💲${Number(item.price).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>` : ''}
+          ${isLow      ? `<span class="badge badge-orange">⚠️ Stock bajo</span>` : ''}
+        </div>
+        ${item.barcode ? `<div class="item-barcode">🔢 ${escHtml(item.barcode)}</div>` : ''}
+        <div class="item-audit">
+          <span>👤 ${escHtml(item.operator||'—')}${item.role ? ' · ' + escHtml(item.role) : ''}</span>
+          <span>🕐 ${escHtml(item.datetime||'—')}</span>
+          ${item.lastUpdate ? `<span>✏️ Últ. modif: ${escHtml(item.lastUpdate)}</span>` : ''}
+        </div>
+      </div>
+      <div class="item-actions">
+        <div class="item-qty">
+          <button class="qty-btn" onclick="changeQty(${realIdx},-1)">−</button>
+          <span class="qty-val">${item.qty}</span>
+          <button class="qty-btn" onclick="changeQty(${realIdx},1)">+</button>
+        </div>
+        <button class="del-btn" onclick="deleteItem(${realIdx})">🗑 Eliminar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══ ADD PRODUCT ══
+function addProduct() {
+  const name     = document.getElementById('inp-name').value.trim();
+  const barcode  = document.getElementById('inp-barcode').value.trim();
+  const qty      = parseInt(document.getElementById('inp-qty').value) || 1;
+  const price    = parseFloat(document.getElementById('inp-price').value) || 0;
+  const cat      = document.getElementById('inp-cat').value;
+  const minStock = parseInt(document.getElementById('inp-min').value) || 0;
+  const dt       = nowStr();
+
+  if (!name) { showToast('⚠️ Ingresá el nombre del producto', 'warn'); document.getElementById('inp-name').focus(); return; }
+
+  // barcode exists → update qty
+  if (barcode) {
+    const existing = inventory.find(i => i.barcode === barcode);
+    if (existing) {
+      existing.qty += qty;
+      existing.lastUpdate    = dt;
+      existing.lastOperator  = operator.name;
+      addAudit('update', `Cantidad actualizada +${qty} → total ${existing.qty} un.`, existing.name);
+      showToast(`✅ ${existing.name}: ahora ${existing.qty} un.`);
+      save(); clearForm(); return;
+    }
+  }
+
+  const item = {
+    id: Date.now(), barcode, name, qty, price, cat, minStock,
+    operator: operator.name,
+    role:     operator.role,
+    store:    operator.store || '',
+    datetime: dt,
+    iso:      nowISO(),
+    lastUpdate: null, lastOperator: null
+  };
+
+  inventory.unshift(item);
+  addAudit('add', `Producto agregado — ${qty} un. · $${price}`, name);
+  save();
+  showToast(`✅ ${name} agregado (${qty} un.)`);
+  clearForm();
+}
+
+function changeQty(idx, delta) {
+  const newQty = (inventory[idx].qty || 0) + delta;
+  if (newQty < 0) return;
+  const prev = inventory[idx].qty;
+  inventory[idx].qty = newQty;
+  inventory[idx].lastUpdate   = nowStr();
+  inventory[idx].lastOperator = operator.name;
+  addAudit('update', `Cantidad: ${prev} → ${newQty}`, inventory[idx].name);
+  save();
+}
+
+function deleteItem(idx) {
+  const name = inventory[idx].name;
+  addAudit('delete', `Producto eliminado`, name);
+  inventory.splice(idx, 1);
+  save();
+  showToast(`🗑️ ${name} eliminado`, 'error');
+}
+
+function clearAll() {
+  if (!inventory.length) { showToast('El inventario ya está vacío', 'warn'); return; }
+  if (!confirm(`¿Borrar los ${inventory.length} productos del inventario?`)) return;
+  addAudit('system', `Inventario borrado completo (${inventory.length} productos)`, null);
+  inventory = [];
+  save();
+  showToast('🗑️ Inventario borrado');
+}
+
+function clearForm() {
+  ['inp-barcode','inp-name','inp-price','inp-min'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('inp-qty').value = '1';
+  document.getElementById('inp-cat').value = '';
+  document.getElementById('inp-operator').value = operator ? operator.name : '';
+  // make sure found panel is hidden and normal form is visible
+  document.getElementById('found-panel').classList.remove('visible');
+  document.querySelector('.input-card').style.display = 'block';
+  foundProductRef = null;
+  document.getElementById('inp-barcode').focus();
+}
+
+function focusManualBarcode() {
+  document.getElementById('inp-barcode').focus();
+  document.getElementById('inp-barcode').scrollIntoView({ behavior:'smooth', block:'center' });
+}
+
+// ══ SCANNER ══
+function toggleScanner() { scanning ? stopScanner() : startScanner(); }
+
+function startScanner() {
+  const vp = document.getElementById('scanner-viewport');
+  vp.style.display = 'block';
+  Quagga.init({
+    inputStream: { name:"Live", type:"LiveStream", target: vp, constraints: { width:{min:400}, height:{min:300}, facingMode:"environment" } },
+    decoder: { readers: ["ean_reader","ean_8_reader","code_128_reader","code_39_reader","upc_reader","upc_e_reader"] },
+    locate: true
+  }, function(err) {
+    if (err) { console.error(err); showToast('❌ No se pudo acceder a la cámara','error'); vp.style.display='none'; return; }
+    Quagga.start();
+    scanning = true;
+    document.getElementById('btn-scan').innerHTML = '<span>⏹️</span> Detener Cámara';
+    document.getElementById('btn-scan').className = 'btn btn-danger';
+  });
+  Quagga.onDetected(function(result) {
+    const code = result.codeResult.code;
+    if (!code) return;
+    Quagga.offDetected();
+    stopScanner();
+    document.getElementById('inp-barcode').value = code;
+    if (navigator.vibrate) navigator.vibrate([100,50,100]);
+    showToast(`🔢 Código leído: ${code}`);
+    lookupBarcode(code);
+  });
+}
+
+function stopScanner() {
+  Quagga.stop();
+  scanning = false;
+  document.getElementById('scanner-viewport').style.display = 'none';
+  document.getElementById('btn-scan').innerHTML = '<span>📷</span> Activar Cámara';
+  document.getElementById('btn-scan').className = 'btn btn-primary';
+}
+
+// ══ EXPORT XLSX ══
+function exportXLSX() {
+  if (!inventory.length) { showToast('No hay productos para exportar','warn'); return; }
+  const wb = XLSX.utils.book_new();
+  const store = operator.store ? ` — ${operator.store}` : '';
+
+  // Sheet 1: Inventario
+  const data = [
+    [`INVENTARIO MINIMARKET${store}`],
+    [`Generado por: ${operator.name} (${operator.role})   Fecha: ${nowStr()}`],
+    [],
+    ['#','Código','Nombre del Producto','Categoría','Cantidad','Precio Unit.','Valor Total','Stock Mín.','Operador','Rol','Fecha de Carga','Últ. Modificación','Último Operador']
+  ];
+  inventory.forEach((item,idx) => {
+    data.push([
+      idx+1,
+      item.barcode||'',
+      item.name,
+      item.cat||'',
+      item.qty,
+      item.price||0,
+      item.qty*(item.price||0),
+      item.minStock||0,
+      item.operator||'',
+      item.role||'',
+      item.datetime||'',
+      item.lastUpdate||'',
+      item.lastOperator||''
+    ]);
+  });
+  data.push([]);
+  data.push(['','','TOTAL GENERAL','',
+    inventory.reduce((s,i)=>s+i.qty,0),'',
+    inventory.reduce((s,i)=>s+i.qty*(i.price||0),0)
+  ]);
+  const ws1 = XLSX.utils.aoa_to_sheet(data);
+  ws1['!cols'] = [{wch:4},{wch:16},{wch:28},{wch:16},{wch:10},{wch:13},{wch:13},{wch:10},{wch:18},{wch:14},{wch:20},{wch:20},{wch:18}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Inventario');
+
+  // Sheet 2: Auditoría
+  const aData = [
+    ['REGISTRO DE AUDITORÍA'],
+    [`Local: ${operator.store||'—'}   Exportado por: ${operator.name}`],
+    [],
+    ['Tipo','Descripción','Producto','Operador','Rol','Fecha y Hora']
+  ];
+  auditLog.forEach(e => {
+    aData.push([e.type, e.desc, e.product||'', e.operator, e.role||'', e.datetime]);
+  });
+  const ws2 = XLSX.utils.aoa_to_sheet(aData);
+  ws2['!cols'] = [{wch:10},{wch:40},{wch:28},{wch:20},{wch:14},{wch:22}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Auditoría');
+
+  // Sheet 3: Por Categoría
+  const cats = {};
+  inventory.forEach(i => {
+    const c = i.cat||'Sin categoría';
+    if (!cats[c]) cats[c] = {items:0,units:0,value:0};
+    cats[c].items++; cats[c].units += i.qty; cats[c].value += i.qty*(i.price||0);
+  });
+  const cData = [['Categoría','Productos','Unidades','Valor Total']];
+  Object.entries(cats).forEach(([cat,d]) => cData.push([cat,d.items,d.units,d.value]));
+  const ws3 = XLSX.utils.aoa_to_sheet(cData);
+  ws3['!cols'] = [{wch:25},{wch:12},{wch:12},{wch:15}];
+  XLSX.utils.book_append_sheet(wb, ws3, 'Por Categoría');
+
+  const now = new Date();
+  const fname = `Inventario_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.xlsx`;
+  XLSX.writeFile(wb, fname);
+  showToast(`✅ ${fname} descargado`);
+}
+
+// ══ EXPORT CSV ══
+function exportCSV() {
+  if (!inventory.length) { showToast('No hay productos','warn'); return; }
+  const rows = [['Codigo','Nombre','Categoria','Cantidad','Precio','Valor Total','Stock Min','Operador','Rol','Fecha Carga','Ult Modificacion','Ult Operador']];
+  inventory.forEach(i => rows.push([
+    i.barcode||'',i.name,i.cat||'',i.qty,i.price||0,(i.qty*(i.price||0)),i.minStock||0,
+    i.operator||'',i.role||'',i.datetime||'',i.lastUpdate||'',i.lastOperator||''
+  ]));
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=`Inventario_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast('✅ CSV descargado');
+}
+
+// ══ COPY TEXT ══
+function copyText() {
+  if (!inventory.length) { showToast('No hay productos','warn'); return; }
+  const store = operator.store ? ` — ${operator.store}` : '';
+  let txt = `📦 INVENTARIO MINIMARKET${store}\n`;
+  txt += `👤 ${operator.name} (${operator.role})\n`;
+  txt += `🕐 ${nowStr()}\n${'─'.repeat(38)}\n`;
+  inventory.forEach(i => {
+    txt += `▸ ${i.name}\n  Cant: ${i.qty}${i.price?` | $${i.price}`:''}${i.cat?` | ${i.cat}`:''}\n  Cargó: ${i.operator||'—'} · ${i.datetime||'—'}\n`;
+  });
+  txt += `${'─'.repeat(38)}\n`;
+  txt += `Total: ${inventory.length} productos | ${inventory.reduce((s,i)=>s+i.qty,0)} unidades\n`;
+  txt += `Valor: $${inventory.reduce((s,i)=>s+i.qty*(i.price||0),0).toLocaleString('es-AR')}`;
+  navigator.clipboard.writeText(txt).then(()=>showToast('✅ Copiado al portapapeles')).catch(()=>showToast('❌ Error al copiar','error'));
+}
+
+function updateExportSummary() {
+  const val = inventory.reduce((s,i)=>s+i.qty*(i.price||0),0);
+  document.getElementById('export-summary').textContent =
+    `${inventory.length} productos · ${inventory.reduce((s,i)=>s+i.qty,0)} unidades · Valor: $${val.toLocaleString('es-AR',{minimumFractionDigits:0})}`;
+}
+
+// ══ TOAST ══
+let toastTimer;
+function showToast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove('show'), 2800);
+}
+
+// ══ TABS ══
+function switchTab(name, el) {
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  if (el) el.classList.add('active');
+  if (scanning && name!=='scan') stopScanner();
+}
+
+// ══ INIT ══
+if (operator) {
+  startApp();
+} else {
+  document.getElementById('login-name').focus();
+}
+
+// ── BARCODE LOOKUP ON ENTER ──
+let foundProductRef = null; // holds reference to existing product while panel is open
+
+document.getElementById('inp-barcode').addEventListener('keydown', function(e) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const code = this.value.trim();
+  if (!code) { document.getElementById('inp-name').focus(); return; }
+  lookupBarcode(code);
+});
+
+// Also trigger lookup on blur (when user tabs away or scanner fills field)
+document.getElementById('inp-barcode').addEventListener('change', function() {
+  const code = this.value.trim();
+  if (code) lookupBarcode(code);
+});
+
+function lookupBarcode(code) {
+  const existing = inventory.find(i => i.barcode === code);
+  if (existing) {
+    showFoundPanel(existing);
+  } else {
+    dismissFound();
+    document.getElementById('inp-name').focus();
+  }
+}
+
+function showFoundPanel(item) {
+  foundProductRef = item;
+  document.getElementById('found-name').textContent  = item.name;
+  document.getElementById('found-cat').textContent   = item.cat  || '—';
+  document.getElementById('found-price').textContent = item.price ? '$' + Number(item.price).toLocaleString('es-AR',{minimumFractionDigits:2}) : '—';
+  document.getElementById('found-qty').textContent   = item.qty + ' un.';
+  document.getElementById('found-op').textContent    = (item.operator || '—') + (item.datetime ? '\n' + item.datetime : '');
+
+  // hide the regular form, show found panel
+  document.getElementById('found-panel').classList.add('visible');
+  document.querySelector('.input-card').style.display = 'none';
+
+  // reset and focus qty
+  const qtyEl = document.getElementById('found-add-qty');
+  qtyEl.value = '1';
+  setTimeout(() => { qtyEl.focus(); qtyEl.select(); }, 80);
+
+  if (navigator.vibrate) navigator.vibrate([60, 40, 60]);
+}
+
+function dismissFound(forceNew) {
+  foundProductRef = null;
+  document.getElementById('found-panel').classList.remove('visible');
+  document.querySelector('.input-card').style.display = 'block';
+  if (forceNew) {
+    // keep barcode, jump to name so they can enter new product name
+    document.getElementById('inp-name').value = '';
+    document.getElementById('inp-name').focus();
+  }
+}
+
+function confirmFoundProduct() {
+  if (!foundProductRef) return;
+  const addQty = parseInt(document.getElementById('found-add-qty').value) || 1;
+  const prev   = foundProductRef.qty;
+  foundProductRef.qty         += addQty;
+  foundProductRef.lastUpdate   = nowStr();
+  foundProductRef.lastOperator = operator.name;
+  addAudit('update', `Cantidad actualizada +${addQty} → total ${foundProductRef.qty} un.`, foundProductRef.name);
+  save();
+  showToast(`✅ ${foundProductRef.name}: ${prev} → ${foundProductRef.qty} un.`);
+  dismissFound();
+  clearForm();
+}
+
+// Enter on found-qty confirms
+document.getElementById('found-add-qty').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); confirmFoundProduct(); }
+});
+
+document.getElementById('inp-name').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('inp-qty').focus(); });
+</script>
+</body>
+</html>
