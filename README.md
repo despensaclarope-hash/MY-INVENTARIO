@@ -1,4 +1,4 @@
-[inventario-scanner.html](https://github.com/user-attachments/files/28806407/inventario-scanner.html)
+[inventario-scanner (1).html](https://github.com/user-attachments/files/28808632/inventario-scanner.1.html)
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -1226,11 +1226,19 @@ function setSheetsStatus(msg, color) {
 async function sendToSheets(productData) {
   if (!sheetsUrl) return;
   try {
-    await fetch(sheetsUrl, {
-      method: 'POST', mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(productData)
+    // Usamos GET con parámetros para evitar bloqueos CORS de Apps Script
+    const params = new URLSearchParams({
+      accion:   'escaneo',
+      barcode:  productData.barcode  || '',
+      name:     productData.name     || '',
+      qty:      productData.qty      || 0,
+      price:    productData.price    || 0,
+      cat:      productData.cat      || '',
+      operator: productData.operator || '',
+      datetime: productData.datetime || nowStr(),
+      store:    productData.store    || '',
     });
+    await fetch(`${sheetsUrl}?${params.toString()}`, { method: 'GET', mode: 'no-cors' });
   } catch(e) { console.warn('Sheets sync error:', e); }
 }
 
@@ -1238,13 +1246,15 @@ async function testSheetConnection() {
   if (!sheetsUrl) { showToast('⚠️ Primero guardá la URL', 'warn'); return; }
   setSheetsStatus('🔄 Probando conexión...', 'yellow');
   try {
-    await fetch(sheetsUrl, {
-      method: 'POST', mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ barcode:'TEST', name:'Prueba de conexión', qty:0, price:0, cat:'Test', operator: operator.name, datetime: nowStr(), store: operator.store||'' })
-    });
-    setSheetsStatus('✅ Conexión exitosa — la planilla está recibiendo datos', 'green');
-    showToast('✅ Conexión con Google Sheets OK');
+    const url = `${sheetsUrl}?accion=ping`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.ok) {
+      setSheetsStatus('✅ ' + (json.msg || 'Conexión exitosa'), 'green');
+      showToast('✅ Conexión con Google Sheets OK');
+    } else {
+      setSheetsStatus('❌ El script respondió con error', 'red');
+    }
   } catch(e) {
     setSheetsStatus('❌ Error de conexión — verificá la URL', 'red');
     showToast('❌ Error al conectar', 'error');
@@ -1256,13 +1266,25 @@ async function syncAllToSheets() {
   if (!inventory.length) { showToast('No hay productos para sincronizar', 'warn'); return; }
   setSheetsStatus(`🔄 Enviando ${inventory.length} productos...`, 'yellow');
   try {
-    await fetch(sheetsUrl, {
-      method: 'POST', mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(inventory)
-    });
-    setSheetsStatus(`✅ ${inventory.length} productos enviados a Google Sheets`, 'green');
-    showToast(`✅ ${inventory.length} productos sincronizados`);
+    // Enviar de a uno para evitar límite de URL
+    let ok = 0;
+    for (const item of inventory) {
+      const params = new URLSearchParams({
+        accion:   'escaneo',
+        barcode:  item.barcode  || '',
+        name:     item.name     || '',
+        qty:      item.qty      || 0,
+        price:    item.price    || 0,
+        cat:      item.cat      || '',
+        operator: item.operator || '',
+        datetime: item.datetime || '',
+        store:    item.store    || '',
+      });
+      await fetch(`${sheetsUrl}?${params.toString()}`, { method: 'GET', mode: 'no-cors' });
+      ok++;
+    }
+    setSheetsStatus(`✅ ${ok} productos enviados a Google Sheets`, 'green');
+    showToast(`✅ ${ok} productos sincronizados`);
   } catch(e) {
     setSheetsStatus('❌ Error al sincronizar', 'red');
     showToast('❌ Error al sincronizar', 'error');
