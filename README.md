@@ -1,4 +1,4 @@
-[inventario-scanner (9).html](https://github.com/user-attachments/files/28818027/inventario-scanner.9.html)
+[inventario-scanner.html](https://github.com/user-attachments/files/28818236/inventario-scanner.html)
 <!DOCTYPE html>
 <html lang="es">
 <head>
