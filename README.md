@@ -1,4 +1,3 @@
-[inventario-scanner (6).html](https://github.com/user-attachments/files/28816857/inventario-scanner.6.html)
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -503,20 +502,28 @@
         </div>
         <div>
           <label>Categoría</label>
-          <select id="inp-cat">
-            <option value="">Sin categoría</option>
-            <option>Bebidas</option>
-            <option>Lácteos</option>
-            <option>Almacén</option>
-            <option>Limpieza</option>
-            <option>Snacks</option>
-            <option>Panificados</option>
-            <option>Higiene personal</option>
-            <option>Congelados</option>
-            <option>Frutas y Verduras</option>
-            <option>Carnes</option>
-            <option>Otro</option>
-          </select>
+          <input id="inp-cat" type="text" placeholder="Ej: PERFUMERIA - DESODORANTES" list="cat-datalist" autocomplete="off">
+          <datalist id="cat-datalist">
+            <option value="BEBIDAS - GASEOSAS">
+            <option value="BEBIDAS - CERVEZAS">
+            <option value="BEBIDAS - SINALCOHOL - AGUAS">
+            <option value="PERECIBLES - LACTEOS - LECHE">
+            <option value="PERECIBLES - LACTEOS - YOGURES">
+            <option value="PERECIBLES - CARNICERIA">
+            <option value="LIMPIEZA - LIMPIEZACOCINA">
+            <option value="LIMPIEZA - LAVANDERIAROPA">
+            <option value="PERFUMERIA - DESODORANTES">
+            <option value="PERFUMERIA - SHAMPOO">
+            <option value="PERFUMERIA - HIGIENEBUCAL">
+            <option value="PERFUMERIA - JABONES">
+            <option value="PRODUCTOSDULCES - GALLETASDULCES">
+            <option value="PRODUCTOSDULCES - SALADITOS">
+            <option value="ALMACEN - ARROZYGRANOS">
+            <option value="ALMACEN - FIDEO">
+            <option value="ALMACEN - ACEITE VINAGRES">
+            <option value="BAZAR - TABACO">
+            <option value="BAZAR - RACIONES">
+          </datalist>
         </div>
         <div>
           <label>Stock mínimo</label>
@@ -1356,50 +1363,75 @@ function updateProgresoSelector() {
 }
 
 function renderProgreso() {
-  const cat         = document.getElementById('prog-cat-select').value;
+  const cat = document.getElementById('prog-cat-select').value;
 
-  // Productos escaneados en inventory filtrados por cat
-  const escaneados  = inventory.filter(i => !cat || i.cat === cat);
+  // Todos los códigos y nombres escaneados (sin filtro de categoría)
+  const escCodes = new Set(inventory.flatMap(i => [i.barcode, i.barcode2]).filter(Boolean));
+  const escNames = new Set(inventory.map(i => i.name.toLowerCase().trim()));
 
-  // Productos del maestro que NO fueron escaneados
-  const escCodes  = new Set(inventory.flatMap(i => [i.barcode, i.barcode2]).filter(Boolean));
-  const escNames  = new Set(inventory.map(i => i.name.toLowerCase().trim()));
-  const sinEscanear = maestro.filter(m => {
-    if (cat && m.cat !== cat) return false;
+  // Productos del Maestro de esta categoría
+  const maestroCat = maestro.filter(m => !cat || m.cat === cat);
+
+  // Del Maestro: cuáles YA fueron escaneados
+  const escaneadosEnMaestro = maestroCat.filter(m => {
+    if (m.barcode  && escCodes.has(m.barcode))  return true;
+    if (m.barcode2 && escCodes.has(m.barcode2)) return true;
+    if (escNames.has((m.name||'').toLowerCase().trim())) return true;
+    return false;
+  });
+
+  // Del Maestro: cuáles FALTAN escanear
+  const sinEscanear = maestroCat.filter(m => {
     if (m.barcode  && escCodes.has(m.barcode))  return false;
     if (m.barcode2 && escCodes.has(m.barcode2)) return false;
     if (escNames.has((m.name||'').toLowerCase().trim())) return false;
     return true;
   });
 
-  const total    = escaneados.length + sinEscanear.length;
-  const pct      = total > 0 ? Math.round((escaneados.length / total) * 100) : 0;
+  // Si no hay maestro cargado, mostrar solo el inventario escaneado de esa categoría
+  const sinMaestro    = maestro.length === 0;
+  const escSinMaestro = inventory.filter(i => !cat || i.cat === cat);
 
-  // Update stats
+  const totalMostrado = sinMaestro ? escSinMaestro.length : maestroCat.length;
+  const escMostrados  = sinMaestro ? escSinMaestro.length : escaneadosEnMaestro.length;
+  const faltMostrados = sinMaestro ? 0                   : sinEscanear.length;
+  const pct           = totalMostrado > 0 ? Math.round((escMostrados / totalMostrado) * 100) : 0;
+
+  // Actualizar contadores
   document.getElementById('prog-pct').textContent        = pct + '%';
   document.getElementById('prog-bar').style.width        = pct + '%';
-  document.getElementById('prog-escaneados').textContent = escaneados.length;
-  document.getElementById('prog-faltanesc').textContent  = sinEscanear.length;
-  document.getElementById('prog-total-cat').textContent  = total;
+  document.getElementById('prog-escaneados').textContent = escMostrados;
+  document.getElementById('prog-faltanesc').textContent  = faltMostrados;
+  document.getElementById('prog-total-cat').textContent  = totalMostrado;
 
-  // Lista ESCANEADOS
+  // ── Lista ESCANEADOS ──
   const okEl = document.getElementById('prog-list-ok');
-  if (!escaneados.length) {
+  // Buscar el objeto del inventario que corresponde a cada producto del maestro escaneado
+  const listaOk = sinMaestro ? escSinMaestro : escaneadosEnMaestro.map(m => {
+    // buscar en inventory por código o nombre
+    return inventory.find(i =>
+      (m.barcode  && (i.barcode === m.barcode  || i.barcode2 === m.barcode))  ||
+      (m.barcode2 && (i.barcode === m.barcode2 || i.barcode2 === m.barcode2)) ||
+      i.name.toLowerCase().trim() === (m.name||'').toLowerCase().trim()
+    ) || { name: m.name, barcode: m.barcode, qty: 0 };
+  });
+
+  if (!listaOk.length) {
     okEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px;">Ninguno aún</div>';
   } else {
-    okEl.innerHTML = escaneados.map(i => `
+    okEl.innerHTML = listaOk.map(i => `
       <div class="prog-item prog-item-ok">
         <div class="prog-item-name">${escHtml(i.name)}</div>
         <div class="prog-item-meta">🔢 ${escHtml(i.barcode||'—')} · 📦 ${i.qty} un.</div>
       </div>`).join('');
   }
 
-  // Lista FALTAN ESCANEAR
+  // ── Lista FALTAN ESCANEAR ──
   const faltaEl = document.getElementById('prog-list-faltan');
-  if (!sinEscanear.length && maestro.length > 0) {
-    faltaEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--verde);font-size:12px;font-weight:700;">✅ ¡Categoría completa!</div>';
-  } else if (!sinEscanear.length) {
+  if (sinMaestro) {
     faltaEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px;">Importá el Maestro para ver los faltantes</div>';
+  } else if (!sinEscanear.length) {
+    faltaEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--verde);font-size:12px;font-weight:700;">✅ ¡Categoría completa!</div>';
   } else {
     faltaEl.innerHTML = sinEscanear.map(m => `
       <div class="prog-item prog-item-falta" onclick="precargarDesdeProgreso('${escHtml(m.barcode||'')}','${escHtml(m.name||'')}','${escHtml(m.cat||'')}','${m.price||0}')">
@@ -1616,31 +1648,34 @@ document.getElementById('inp-barcode').addEventListener('change', function() {
 });
 
 function lookupBarcode(code) {
-  // Busca por código principal O código alternativo
+  // 1. Buscar en inventario ya escaneado por cod1 o cod2
   const existing = inventory.find(i =>
     (i.barcode  && i.barcode  === code) ||
     (i.barcode2 && i.barcode2 === code)
   );
   if (existing) {
     showFoundPanel(existing);
-  } else {
-    // También buscar en maestro para precargar datos
-    const enMaestro = maestro.find(m =>
-      (m.barcode  && m.barcode  === code) ||
-      (m.barcode2 && m.barcode2 === code)
-    );
-    if (enMaestro) {
-      // Precargar datos del maestro en el formulario
-      document.getElementById('inp-name').value  = enMaestro.name;
-      document.getElementById('inp-cat').value   = enMaestro.cat  || '';
-      document.getElementById('inp-price').value = enMaestro.price || '';
-      showToast(`📋 Producto del Maestro: ${enMaestro.name}`);
-      document.getElementById('inp-qty').focus();
-    } else {
-      dismissFound();
-      document.getElementById('inp-name').focus();
-    }
+    return;
   }
+
+  // 2. Buscar en Maestro para precargar datos completos
+  const enMaestro = maestro.find(m =>
+    (m.barcode  && m.barcode  === code) ||
+    (m.barcode2 && m.barcode2 === code)
+  );
+
+  dismissFound();
+
+  if (enMaestro) {
+    // Precargar TODOS los datos del maestro en el formulario
+    document.getElementById('inp-name').value  = enMaestro.name  || '';
+    document.getElementById('inp-cat').value   = enMaestro.cat   || '';
+    document.getElementById('inp-price').value = enMaestro.price || '';
+    showToast(`📋 ${enMaestro.name}`);
+  } else {
+    showToast(`🔢 Código: ${code} — completá los datos`);
+  }
+  document.getElementById('inp-qty').focus();
 }
 
 function showFoundPanel(item) {
