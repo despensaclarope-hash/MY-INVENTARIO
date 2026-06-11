@@ -1,4 +1,4 @@
-[inventario-scanner (4).html](https://github.com/user-attachments/files/28817607/inventario-scanner.4.html)
+[inventario-scanner (5).html](https://github.com/user-attachments/files/28817717/inventario-scanner.5.html)
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -1265,7 +1265,11 @@ function importXLSX(input) {
       const iQty     = col('cantidad',          'stock_sistema');
       const iPrice   = col('precio',            'precio_venta');
       const iCost    = col('precio_costo');
-      const iCat     = col('categoria',         'rubro');
+      const iCat     = col('categoria', 'rubro', 'rúbro', 'rubros', 'categoria ', 'rubro ');
+
+      // DEBUG — mostrar las cabeceras encontradas
+      console.log('Cabeceras:', headers);
+      console.log('iCod1:', iCod1, 'iCod2:', iCod2, 'iName:', iName, 'iQty:', iQty, 'iCat:', iCat, 'iPrice:', iPrice);
       const iMin     = col('stock_minimo');
 
       if (iName === -1) { showToast('❌ No se encontró columna Nombre o Producto', 'error'); return; }
@@ -1291,7 +1295,7 @@ function importXLSX(input) {
 
         if (isMaestro) {
           // ── MAESTRO: solo guardar como referencia, NO agregar al inventario ──
-          maestroImport.push({ barcode: cod1, barcode2: cod2, name, cat, qty, price, cost });
+          maestroImport.push({ barcode: cod1, barcode2: cod2, name, cat, rubro: cat, qty, price, cost });
           added++;
         } else {
           // ── PLANTILLA DE IMPORTACIÓN: sí agregar al inventario ──
@@ -1669,10 +1673,11 @@ function lookupBarcode(code) {
 
   if (enMaestro) {
     // Precargar TODOS los datos del maestro en el formulario
+    const catVal = enMaestro.cat || enMaestro.rubro || '';
     document.getElementById('inp-name').value  = enMaestro.name  || '';
-    document.getElementById('inp-cat').value   = enMaestro.cat   || '';
+    document.getElementById('inp-cat').value   = catVal;
     document.getElementById('inp-price').value = enMaestro.price || '';
-    showToast(`📋 ${enMaestro.name}`);
+    showToast(`📋 ${enMaestro.name} | Cat: ${catVal || 'SIN CATEGORÍA'}`);
   } else {
     showToast(`🔢 Código: ${code} — completá los datos`);
   }
