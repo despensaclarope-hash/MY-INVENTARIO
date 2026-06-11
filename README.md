@@ -1,4 +1,4 @@
-[inventario-scanner (5).html](https://github.com/user-attachments/files/28817717/inventario-scanner.5.html)
+[inventario-scanner (9).html](https://github.com/user-attachments/files/28818027/inventario-scanner.9.html)
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -130,6 +130,7 @@
   .btn-secondary:hover { border-color: var(--verde); color: var(--verde); }
   .btn-danger    { background: var(--rojo); color: #fff; }
   .btn-warning   { background: var(--amarillo); color: #000; }
+  .btn-blue      { background: var(--azul); color: #fff; }
   .btn:active    { transform: scale(0.97); }
 
   /* ── INPUTS ── */
@@ -1266,10 +1267,6 @@ function importXLSX(input) {
       const iPrice   = col('precio',            'precio_venta');
       const iCost    = col('precio_costo');
       const iCat     = col('categoria', 'rubro', 'rúbro', 'rubros', 'categoria ', 'rubro ');
-
-      // DEBUG — mostrar las cabeceras encontradas
-      console.log('Cabeceras:', headers);
-      console.log('iCod1:', iCod1, 'iCod2:', iCod2, 'iName:', iName, 'iQty:', iQty, 'iCat:', iCat, 'iPrice:', iPrice);
       const iMin     = col('stock_minimo');
 
       if (iName === -1) { showToast('❌ No se encontró columna Nombre o Producto', 'error'); return; }
@@ -1438,11 +1435,17 @@ function renderProgreso() {
   } else if (!sinEscanear.length) {
     faltaEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--verde);font-size:12px;font-weight:700;">✅ ¡Categoría completa!</div>';
   } else {
-    faltaEl.innerHTML = sinEscanear.map(m => `
-      <div class="prog-item prog-item-falta" onclick="precargarDesdeProgreso('${escHtml(m.barcode||'')}','${escHtml(m.name||'')}','${escHtml(m.cat||'')}','${m.price||0}')">
+    faltaEl.innerHTML = sinEscanear.map((m, idx) => `
+      <div class="prog-item prog-item-falta" data-idx="${idx}" id="falta-${idx}">
         <div class="prog-item-name">${escHtml(m.name)}</div>
         <div class="prog-item-meta">🔢 ${escHtml(m.barcode||'—')} · Stock: ${m.qty||0} un. · Tocá para escanear</div>
       </div>`).join('');
+
+    // Agregar eventos después de renderizar para evitar problemas con comillas en onclick
+    sinEscanear.forEach((m, idx) => {
+      const el = document.getElementById(`falta-${idx}`);
+      if (el) el.addEventListener('click', () => precargarDesdeProgreso(m.barcode||'', m.name||'', m.cat||'', m.price||0));
+    });
   }
 }
 
