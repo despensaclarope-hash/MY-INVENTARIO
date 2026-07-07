@@ -820,9 +820,25 @@
 let inventory  = JSON.parse(localStorage.getItem('mm_inv')   || '[]');
 let auditLog   = JSON.parse(localStorage.getItem('mm_audit') || '[]');
 let operator   = JSON.parse(localStorage.getItem('mm_op')    || 'null');
-let maestro    = JSON.parse(localStorage.getItem('mm_maestro')|| '[]'); // productos del maestro sin escanear
 let scanning   = false;
 let currentFilter = '';
+
+// Cargar maestro — soporta formato completo y compacto
+function cargarMaestro() {
+  const full    = localStorage.getItem('mm_maestro');
+  const compact = localStorage.getItem('mm_maestro_compact');
+  if (full) return JSON.parse(full);
+  if (compact) {
+    // Expandir formato compacto
+    return JSON.parse(compact).map(m => ({
+      barcode: m.b, barcode2: m.b2,
+      name: m.n, cat: m.c, rubro: m.c,
+      qty: m.q, price: m.p, cost: 0
+    }));
+  }
+  return [];
+}
+let maestro = cargarMaestro();
 
 // ══ HELPERS ══
 function nowStr() {
@@ -1380,32 +1396,48 @@ function importXLSX(input) {
       let headerRow = -1;
       for (let i = 0; i < Math.min(rows.length, 10); i++) {
         const row = rows[i].map(c => String(c).toLowerCase().trim());
-        // Acepta cabeceras del Maestro CLAROPE o de la plantilla de importación
-        if (row.some(c => ['nombre','nombre *','producto'].includes(c))) {
+        if (row.some(c => ['nombre','nombre *','producto','name'].includes(c))) {
           headerRow = i; break;
         }
       }
-      if (headerRow === -1) { showToast('❌ No se encontró la fila de cabeceras', 'error'); return; }
+      if (headerRow === -1) { showToast('❌ No se encontró columna Nombre o Producto', 'error'); return; }
 
-      // Mapear columnas — acepta nombres del Maestro CLAROPE Y de la plantilla
+      // Mapear columnas con búsqueda flexible (ignora mayúsculas, espacios y guiones bajos)
       const headers = rows[headerRow].map(c => String(c).toLowerCase().replace(/\s*\*/g,'').trim());
-      const col = (...names) => { for (const n of names) { const i = headers.indexOf(n); if (i !== -1) return i; } return -1; };
+      const col = (...names) => {
+        for (const n of names) {
+          // Búsqueda exacta primero
+          let i = headers.indexOf(n);
+          if (i !== -1) return i;
+          // Búsqueda sin espacios/guiones bajos
+          const nClean = n.replace(/[\s_]/g,'');
+          i = headers.findIndex(h => h.replace(/[\s_]/g,'') === nClean);
+          if (i !== -1) return i;
+        }
+        return -1;
+      };
 
-      // Columnas — primero busca nombre de la plantilla, luego del Maestro CLAROPE
-      const iCod1 = col('codigo_barras','código_principal','codigo_principal','cód. principal','cod. principal','codigo');
-      const iCod2 = col('codigo_alternativo','código_alternativo','cód. alternativo','cod. alternativo');
-      const iName = col('nombre','producto','nombre del producto');
-      const iQty  = col('cantidad','stock_sistema','cant. contada');
-      const iPrice= col('precio','precio_venta','precio unit.','precio unit');
-      const iCost = col('precio_costo','precio costo');
-      const iCat  = col('categoria','rubro','categoría');
+      // Acepta formato CLAROPE, plantilla propia, y el Excel del usuario
+      const iCod1 = col('codigo','código','codigo_barras','código_principal','codigo_principal','cód. principal','cod. principal');
+      const iCod2 = col('codigo de barras','código de barras','codigo_alternativo','código_alternativo','cód. alternativo','cod. alternativo');
+      const iName = col('nombre','producto','nombre del producto','name');
+      const iQty  = col('cantidad','stock_sistema','stock sistema','existencia','stock','cant. contada','qty');
+      const iPrice= col('precio bruto','precio brut','precio_venta','precio venta','precio unit.','precio unit','precio','price');
+      const iCost = col('precio_costo','precio costo','costo','cost');
+      const iCat  = col('rubro','categoria','categoría','category');
       const iMin  = col('stock_minimo','stock mín.','stock min');
+
+      // Detectar si es Maestro por nombre de hoja O por columnas presentes
+      const isMaestro = sheetName === 'MAESTRO_PRODUCTOS' || sheetName === 'MAESTRO' ||
+                        headers.includes('rubro') || headers.includes('codigo_principal') ||
+                        headers.includes('código_principal');
+      // dataStart: si es maestro empieza en la fila siguiente al header
+      // si tiene filas vacías arriba (como el Excel del usuario con header en fila 3) empieza directo
+      const dataStart = headerRow + 1;
 
       if (iName === -1) { showToast('❌ No se encontró columna Nombre o Producto', 'error'); return; }
 
       const dt = nowStr();
-      const isMaestro  = sheetName === 'MAESTRO_PRODUCTOS' || sheetName === 'MAESTRO';
-      const dataStart  = headerRow + (isMaestro ? 1 : 2);
       const maestroImport = [];
       let added = 0, updated = 0, skipped = 0;
 
@@ -1414,13 +1446,22 @@ function importXLSX(input) {
         const name = String(row[iName] || '').trim();
         if (!name || name.toLowerCase().includes('ejemplo')) { skipped++; continue; }
 
-        const cod1  = iCod1 >= 0 ? String(row[iCod1] || '').trim() : '';
-        const cod2  = iCod2 >= 0 ? String(row[iCod2] || '').trim() : '';
-        const qty   = parseInt(row[iQty])    || 0;
+        // Leer códigos — convertir número a string limpio (sin decimales)
+        const cod1Raw = iCod1 >= 0 ? row[iCod1] : '';
+        const cod2Raw = iCod2 >= 0 ? row[iCod2] : '';
+        // Si es número (ej: 1, 2, 3 o EAN-13 como número) convertir a string sin decimales
+        const cod1 = cod1Raw !== '' && cod1Raw !== null && cod1Raw !== undefined
+          ? (typeof cod1Raw === 'number' ? Math.round(cod1Raw).toString() : String(cod1Raw)).trim()
+          : '';
+        const cod2 = cod2Raw !== '' && cod2Raw !== null && cod2Raw !== undefined
+          ? (typeof cod2Raw === 'number' ? Math.round(cod2Raw).toString() : String(cod2Raw)).trim()
+          : '';
+
+        const qty   = parseFloat(row[iQty])  || 0;  // float para productos por kilo
         const price = parseFloat(row[iPrice]) || 0;
         const cost  = iCost >= 0 ? parseFloat(row[iCost]) || 0 : 0;
         const cat   = iCat >= 0  ? String(row[iCat] || '').trim() : '';
-        const minStock = iMin >= 0 ? parseInt(row[iMin]) || 0 : 0;
+        const minStock = iMin >= 0 ? parseFloat(row[iMin]) || 0 : 0;
 
         if (isMaestro) {
           // ── MAESTRO: solo guardar como referencia, NO agregar al inventario ──
@@ -1458,14 +1499,38 @@ function importXLSX(input) {
 
       // Guardar maestro si se importó MAESTRO_PRODUCTOS
       if (maestroImport.length > 0) {
-        maestro = maestroImport;
-        localStorage.setItem('mm_maestro', JSON.stringify(maestro));
+        // Guardar maestro en chunks si es muy grande
+        try {
+          const maestroJSON = JSON.stringify(maestroImport);
+          if (maestroJSON.length > 4 * 1024 * 1024) {
+            // Más de 4MB — guardar solo campos esenciales para ahorrar espacio
+            const maestroCompact = maestroImport.map(m => ({
+              b:  m.barcode  || '',
+              b2: m.barcode2 || '',
+              n:  m.name,
+              c:  m.cat      || '',
+              q:  m.qty      || 0,
+              p:  m.price    || 0,
+            }));
+            localStorage.setItem('mm_maestro_compact', JSON.stringify(maestroCompact));
+            localStorage.removeItem('mm_maestro');
+            maestro = maestroImport; // en memoria completo
+          } else {
+            localStorage.setItem('mm_maestro', maestroJSON);
+            localStorage.removeItem('mm_maestro_compact');
+            maestro = maestroImport;
+          }
+        } catch(storageErr) {
+          // Si falla el storage, al menos mantener en memoria para esta sesión
+          maestro = maestroImport;
+          console.warn('Storage lleno, maestro solo en memoria:', storageErr);
+        }
       }
 
       if (isMaestro) {
-        addAudit('system', `Maestro importado: ${added} productos de referencia`, null);
+        addAudit('system', `Maestro importado: ${added} productos de referencia (${skipped} sin nombre omitidos)`, null);
         save();
-        showToast(`✅ Maestro cargado: ${added} productos de referencia`);
+        showToast(`✅ Maestro: ${added} productos cargados${skipped ? ' · ' + skipped + ' omitidos' : ''}`);
       } else {
         addAudit('system', `Importación: ${added} nuevos, ${updated} actualizados, ${skipped} omitidos`, null);
         save();
@@ -1499,8 +1564,8 @@ function updateProgresoSelector() {
 function renderProgreso() {
   const cat = document.getElementById('prog-cat-select').value;
 
-  // Todos los códigos y nombres escaneados (sin filtro de categoría)
-  const escCodes = new Set(inventory.flatMap(i => [i.barcode, i.barcode2]).filter(Boolean));
+  // Todos los códigos y nombres escaneados (sin filtro de categoría) — normalizados
+  const escCodes = new Set(inventory.flatMap(i => [i.barcode, i.barcode2]).filter(Boolean).map(c => String(c).trim()));
   const escNames = new Set(inventory.map(i => i.name.toLowerCase().trim()));
 
   // Productos del Maestro de esta categoría
@@ -1508,16 +1573,16 @@ function renderProgreso() {
 
   // Del Maestro: cuáles YA fueron escaneados
   const escaneadosEnMaestro = maestroCat.filter(m => {
-    if (m.barcode  && escCodes.has(m.barcode))  return true;
-    if (m.barcode2 && escCodes.has(m.barcode2)) return true;
+    if (m.barcode  && escCodes.has(String(m.barcode).trim()))  return true;
+    if (m.barcode2 && escCodes.has(String(m.barcode2).trim())) return true;
     if (escNames.has((m.name||'').toLowerCase().trim())) return true;
     return false;
   });
 
   // Del Maestro: cuáles FALTAN escanear
   const sinEscanear = maestroCat.filter(m => {
-    if (m.barcode  && escCodes.has(m.barcode))  return false;
-    if (m.barcode2 && escCodes.has(m.barcode2)) return false;
+    if (m.barcode  && escCodes.has(String(m.barcode).trim()))  return false;
+    if (m.barcode2 && escCodes.has(String(m.barcode2).trim())) return false;
     if (escNames.has((m.name||'').toLowerCase().trim())) return false;
     return true;
   });
@@ -1645,46 +1710,85 @@ function exportEscaneadosHoy() {
 function descargarPlantilla() {
   const wb = XLSX.utils.book_new();
 
+  // ── Hoja MAESTRO_PRODUCTOS con cabeceras exactas que lee la app ──
   const data = [
     ['PLANTILLA DE IMPORTACIÓN — INVENTARIO MINIMARKET CLAROPE'],
-    ['Completá desde la fila 4 · Columnas con ✱ son OBLIGATORIAS · No cambies los nombres de columnas'],
+    ['Completá desde la fila 4  |  Código_Principal y Producto son OBLIGATORIOS  |  No cambies los nombres de columnas'],
     [],
-    ['Código_Principal','Código_Alternativo','Producto ✱','Rubro','Stock_Sistema','Precio_Venta','Precio_Costo','Observación'],
-    ['7790895000084','7790895000084','COCA COLA 500ML','BEBIDAS - GASEOSAS',10,7500,5000,'Ejemplo — borrar'],
-    ['7791813421305','','LECHE ENTERA 1L','PERECIBLES - LACTEOS - LECHE',5,8500,6000,'Ejemplo — borrar'],
-    ['','','MI PRODUCTO SIN CÓDIGO','ALMACEN - ARROZYGRANOS',3,1500,900,'Ejemplo — borrar'],
+    // Cabeceras exactas — sin caracteres especiales
+    ['Código_Principal','Código_Alternativo','Producto','Rubro','Stock_Sistema','Precio_Venta','Precio_Costo','Observación'],
+    // Ejemplos
+    ['7790895000084','7790895000084','COCA COLA 500ML',           'BEBIDAS - GASEOSAS',              10, 7500, 5000, 'Ejemplo — borrar'],
+    ['7791813421305','',            'LECHE ENTERA LA SERENISIMA 1L','PERECIBLES - LACTEOS - LECHE',   5,  8500, 6000, 'Ejemplo — borrar'],
+    ['7793040020540','7793040020540','AJAX LIMON 500ML',          'LIMPIEZA - LIMPIEZACOCINA',        4,  3800, 2500, 'Ejemplo — borrar'],
+    ['7790040516681','',            'OREO ORIGINAL 117GR',        'PRODUCTOSDULCES - GALLETASDULCES', 2,  5900, 4000, 'Ejemplo — borrar'],
+    ['',             '',            'PRODUCTO SIN CÓDIGO',        'ALMACEN - ARROZYGRANOS',           3,  1500,  900, 'Ejemplo — borrar'],
   ];
+
   const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [{wch:18},{wch:18},{wch:30},{wch:30},{wch:14},{wch:14},{wch:14},{wch:20}];
+  ws['!cols'] = [{wch:18},{wch:18},{wch:32},{wch:32},{wch:14},{wch:14},{wch:14},{wch:22}];
+
+  // Freeze y filtros desde fila 4
+  ws['!freeze'] = { xSplit: 0, ySplit: 4 };
+
   XLSX.utils.book_append_sheet(wb, ws, 'MAESTRO_PRODUCTOS');
 
+  // ── Hoja INSTRUCCIONES ──
   const inst = [
-    ['INSTRUCCIONES DE USO'],[''],
+    ['📋 INSTRUCCIONES DE USO — PLANTILLA CLAROPE'],
+    [''],
     ['COLUMNAS — NO CAMBIAR LOS NOMBRES'],
-    ['Código_Principal',   'Código EAN-13 principal (opcional pero recomendado)'],
-    ['Código_Alternativo', 'Segundo código si tiene dos (opcional)'],
-    ['Producto',           '✱ OBLIGATORIO — Nombre del producto'],
-    ['Rubro',              'Categoría (ej: BEBIDAS - GASEOSAS)'],
-    ['Stock_Sistema',      'Cantidad actual en el sistema'],
-    ['Precio_Venta',       'Precio de venta al público'],
-    ['Precio_Costo',       'Precio de costo'],
-    ['Observación',        'Notas adicionales'],[''],
+    ['Columna',              'Obligatorio', 'Descripción'],
+    ['Código_Principal',     'No',          'Código EAN-13 principal del producto'],
+    ['Código_Alternativo',   'No',          'Segundo código si tiene dos'],
+    ['Producto',             'SÍ ✱',        'Nombre completo del producto'],
+    ['Rubro',                'No',          'Categoría (ej: BEBIDAS - GASEOSAS)'],
+    ['Stock_Sistema',        'No',          'Cantidad actual en el sistema'],
+    ['Precio_Venta',         'No',          'Precio de venta al público'],
+    ['Precio_Costo',         'No',          'Precio de costo'],
+    ['Observación',          'No',          'Notas adicionales'],
+    [''],
     ['PASOS PARA IMPORTAR'],
-    ['1','Completá productos desde fila 4 (borrá los ejemplos)'],
-    ['2','Guardá como .xlsx'],
-    ['3','Mandá al celular por WhatsApp o Google Drive'],
-    ['4','App → Exportar → Importar desde Excel → seleccioná este archivo'],[''],
-    ['RUBROS MÁS USADOS'],
-    ['BEBIDAS - GASEOSAS'],['BEBIDAS - CERVEZAS'],['BEBIDAS - SINALCOHOL - AGUAS'],
-    ['PERECIBLES - LACTEOS - LECHE'],['PERECIBLES - CARNICERIA'],['PERECIBLES - CONGELADOS'],
-    ['LIMPIEZA - LIMPIEZACOCINA'],['LIMPIEZA - LAVANDERIAROPA'],['LIMPIEZA - LIMPIEZABAÑOS'],
-    ['PERFUMERIA - DESODORANTES'],['PERFUMERIA - SHAMPOO'],['PERFUMERIA - HIGIENEBUCAL'],
-    ['PRODUCTOSDULCES - GALLETASDULCES'],['PRODUCTOSDULCES - SALADITOS'],['PRODUCTOSDULCES - BOMBONERIA - CHOCOLATES'],
-    ['ALMACEN - ARROZYGRANOS'],['ALMACEN - FIDEO'],['ALMACEN - ACEITE VINAGRES'],['ALMACEN - HARINAS'],
-    ['BAZAR - TABACO'],['BAZAR - RACIONES'],['BAZAR - DESCARTABLES'],
+    ['1', 'Completá los productos desde la fila 4'],
+    ['2', 'Borrá las filas de ejemplo'],
+    ['3', 'Guardá el archivo como .xlsx'],
+    ['4', 'Mandá al celular por WhatsApp o Google Drive'],
+    ['5', 'App → pestaña Exportar → Importar desde Excel → seleccioná este archivo'],
+    [''],
+    ['RUBROS MÁS USADOS — copiar y pegar en columna Rubro'],
+    ['BEBIDAS - GASEOSAS'],
+    ['BEBIDAS - CERVEZAS'],
+    ['BEBIDAS - SINALCOHOL - AGUAS'],
+    ['BEBIDAS - SINALCOHOL - JUGOPOLVO'],
+    ['PERECIBLES - LACTEOS - LECHE'],
+    ['PERECIBLES - LACTEOS - YOGURES'],
+    ['PERECIBLES - CARNICERIA'],
+    ['PERECIBLES - CONGELADOS'],
+    ['PERECIBLES - FIAMBRERIA'],
+    ['LIMPIEZA - LIMPIEZACOCINA'],
+    ['LIMPIEZA - LAVANDERIAROPA'],
+    ['LIMPIEZA - LIMPIEZABAÑOS'],
+    ['LIMPIEZA - INSECTICIDAS'],
+    ['PERFUMERIA - DESODORANTES'],
+    ['PERFUMERIA - SHAMPOO'],
+    ['PERFUMERIA - HIGIENEBUCAL'],
+    ['PERFUMERIA - JABONES'],
+    ['PERFUMERIA - HIGIENECORPORAL'],
+    ['PRODUCTOSDULCES - GALLETASDULCES'],
+    ['PRODUCTOSDULCES - GALLETASSALADAS'],
+    ['PRODUCTOSDULCES - SALADITOS'],
+    ['PRODUCTOSDULCES - BOMBONERIA - CHOCOLATES'],
+    ['ALMACEN - ARROZYGRANOS'],
+    ['ALMACEN - FIDEO'],
+    ['ALMACEN - ACEITE VINAGRES'],
+    ['ALMACEN - HARINAS'],
+    ['ALMACEN - AZUCAR'],
+    ['BAZAR - TABACO'],
+    ['BAZAR - RACIONES'],
+    ['BAZAR - DESCARTABLES'],
   ];
   const ws2 = XLSX.utils.aoa_to_sheet(inst);
-  ws2['!cols'] = [{wch:25},{wch:60}];
+  ws2['!cols'] = [{wch:25},{wch:14},{wch:55}];
   XLSX.utils.book_append_sheet(wb, ws2, 'INSTRUCCIONES');
 
   XLSX.writeFile(wb, 'Plantilla_Importacion_CLAROPE.xlsx');
@@ -1996,10 +2100,13 @@ document.getElementById('inp-barcode').addEventListener('change', function() {
 });
 
 function lookupBarcode(code) {
+  // Normalizar código — quitar ceros a la izquierda no intencionados y espacios
+  const codeNorm = String(code).trim();
+
   // 1. Buscar en inventario ya escaneado por cod1 o cod2
   const existing = inventory.find(i =>
-    (i.barcode  && i.barcode  === code) ||
-    (i.barcode2 && i.barcode2 === code)
+    (i.barcode  && String(i.barcode).trim()  === codeNorm) ||
+    (i.barcode2 && String(i.barcode2).trim() === codeNorm)
   );
   if (existing) {
     showFoundPanel(existing);
@@ -2008,8 +2115,8 @@ function lookupBarcode(code) {
 
   // 2. Buscar en Maestro para precargar datos completos
   const enMaestro = maestro.find(m =>
-    (m.barcode  && m.barcode  === code) ||
-    (m.barcode2 && m.barcode2 === code)
+    (m.barcode  && String(m.barcode).trim()  === codeNorm) ||
+    (m.barcode2 && String(m.barcode2).trim() === codeNorm)
   );
 
   dismissFound();
