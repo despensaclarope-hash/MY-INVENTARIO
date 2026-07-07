@@ -245,7 +245,26 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
-  /* ── PROGRESS ITEMS ── */
+  /* ── DIFERENCIA ALERT ── */
+  .diff-panel {
+    border-radius: 14px; padding: 16px; margin-bottom: 14px;
+    display: none; animation: popIn 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .diff-panel.show { display: block; }
+  .diff-faltante { background: rgba(211,47,47,0.12); border: 2px solid var(--rojo); }
+  .diff-sobrante { background: rgba(21,101,192,0.12); border: 2px solid #1565C0; }
+  .diff-ok       { background: rgba(0,200,83,0.10);  border: 2px solid var(--verde); }
+  .diff-title    { font-size: 16px; font-weight: 800; margin-bottom: 6px; }
+  .diff-row      { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.07); }
+  .diff-row:last-child { border-bottom: none; }
+  .diff-val      { font-weight: 700; }
+  .gerente-badge {
+    background: linear-gradient(135deg, #F9A825, #FF6F00);
+    color: #000; font-size: 10px; font-weight: 800;
+    padding: 2px 8px; border-radius: 20px; margin-left: 6px;
+    letter-spacing: 0.3px;
+  }
+</style>
   .prog-item { border-radius: 8px; padding: 7px 9px; font-size: 11px; font-weight: 600; line-height: 1.4; transition: opacity 0.15s; }
   .prog-item:active { opacity: 0.7; }
   .prog-item-ok    { background: rgba(0,200,83,0.12); border: 1px solid rgba(0,200,83,0.25); color: var(--text); }
@@ -271,10 +290,11 @@
       <label>🏷️ Tu rol</label>
       <select id="login-role">
         <option value="Operador/a">Operador/a</option>
+        <option value="Repositor/a">Repositor/a</option>
         <option value="Encargado/a">Encargado/a</option>
+        <option value="Gerente">Gerente ⭐</option>
         <option value="Supervisor/a">Supervisor/a</option>
         <option value="Dueño/a">Dueño/a</option>
-        <option value="Repositor/a">Repositor/a</option>
       </select>
     </div>
     <div class="login-field">
@@ -504,6 +524,16 @@
         <span>·</span>
         <span onclick="dismissFound(true)" style="color:var(--amarillo);cursor:pointer;font-weight:700;">📝 Cargar como nuevo</span>
       </div>
+    </div>
+
+    <!-- ── PANEL DIFERENCIA (solo visible para Gerente/Dueño/Supervisor) ── -->
+    <div id="diff-panel" class="diff-panel">
+      <div class="diff-title" id="diff-title">📊 Diferencia detectada</div>
+      <div class="diff-row"><span style="color:var(--muted)">Producto</span><span class="diff-val" id="diff-nombre">—</span></div>
+      <div class="diff-row"><span style="color:var(--muted)">Stock en sistema</span><span class="diff-val" id="diff-sistema">—</span></div>
+      <div class="diff-row"><span style="color:var(--muted)">Cantidad contada</span><span class="diff-val" id="diff-contada">—</span></div>
+      <div class="diff-row"><span style="color:var(--muted)">Diferencia</span><span class="diff-val" id="diff-dif">—</span></div>
+      <div class="diff-row"><span style="color:var(--muted)">Impacto en costo</span><span class="diff-val" id="diff-impacto">—</span></div>
     </div>
 
     <div class="input-card">
@@ -835,8 +865,9 @@ function startApp() {
   document.getElementById('app').style.display = 'block';
   // operator bar
   document.getElementById('op-avatar').textContent = operator.name.charAt(0).toUpperCase();
-  document.getElementById('op-name').textContent   = operator.name;
-  document.getElementById('op-role').textContent   = operator.role + (operator.store ? ' · ' + operator.store : '');
+  document.getElementById('op-name').innerHTML = escHtml(operator.name) +
+    (esGerente() ? '<span class="gerente-badge">⭐ GERENTE</span>' : '');
+  document.getElementById('op-role').textContent = operator.role + (operator.store ? ' · ' + operator.store : '');
   // form fields
   document.getElementById('inp-operator').value  = operator.name;
   document.getElementById('inp-datetime').value  = nowStr();
@@ -1041,6 +1072,7 @@ function addProduct() {
   inventory.unshift(item);
   addAudit('add', `Producto agregado — ${qty} un. · $${price}`, name);
   sendToSheets(item);
+  mostrarDiferencia(item, qty);
   save();
   showToast(`✅ ${name} agregado (${qty} un.)`);
   clearForm();
@@ -1206,32 +1238,37 @@ function exportXLSX() {
     [`INVENTARIO MINIMARKET${store}`],
     [`Generado por: ${operator.name} (${operator.role})   Fecha: ${nowStr()}`],
     [],
-    ['#','Cód. Principal','Cód. Alternativo','Nombre del Producto','Categoría','Cantidad','Precio Unit.','Valor Total','Stock Mín.','Operador','Rol','Fecha de Carga','Últ. Modificación']
+    ['#','Cód. Principal','Cód. Alternativo','Nombre del Producto','Categoría','Stock Sistema','Cant. Contada','Diferencia','Precio Unit.','Valor Contado','Operador','Rol','Fecha de Carga']
   ];
   inventory.forEach((item,idx) => {
+    const stockSist = item.stockSistema || 0;
+    const dif       = item.qty - stockSist;
     data.push([
       idx+1,
       item.barcode||'',
       item.barcode2||'',
       item.name,
       item.cat||'',
+      stockSist,
       item.qty,
+      dif,
       item.price||0,
       item.qty*(item.price||0),
-      item.minStock||0,
       item.operator||'',
       item.role||'',
-      item.datetime||'',
-      item.lastUpdate||''
+      item.datetime||''
     ]);
   });
   data.push([]);
   data.push(['','','','TOTAL GENERAL','',
-    inventory.reduce((s,i)=>s+i.qty,0),'',
+    inventory.reduce((s,i)=>s+(i.stockSistema||0),0),
+    inventory.reduce((s,i)=>s+i.qty,0),
+    inventory.reduce((s,i)=>s+(i.qty-(i.stockSistema||0)),0),
+    '','',
     inventory.reduce((s,i)=>s+i.qty*(i.price||0),0)
   ]);
   const ws1 = XLSX.utils.aoa_to_sheet(data);
-  ws1['!cols'] = [{wch:4},{wch:16},{wch:16},{wch:28},{wch:22},{wch:10},{wch:13},{wch:13},{wch:10},{wch:18},{wch:14},{wch:20},{wch:20}];
+  ws1['!cols'] = [{wch:4},{wch:16},{wch:16},{wch:28},{wch:22},{wch:13},{wch:13},{wch:12},{wch:13},{wch:14},{wch:18},{wch:14},{wch:20}];
   XLSX.utils.book_append_sheet(wb, ws1, 'Escaneados');
 
   // Sheet 2: NO escaneados (del Maestro)
@@ -1784,7 +1821,50 @@ if (operator) {
   document.getElementById('login-name').focus();
 }
 
-// ══ SCAN SEARCH ══
+// ══ ROL — GERENTE ══
+function esGerente() {
+  if (!operator) return false;
+  const rolesGerente = ['Gerente','Dueño/a','Supervisor/a'];
+  return rolesGerente.some(r => operator.role.includes(r.replace('/a',''))) ||
+         rolesGerente.includes(operator.role);
+}
+
+// ══ MOSTRAR DIFERENCIA AL GERENTE ══
+function mostrarDiferencia(item, cantidadAgregada) {
+  if (!esGerente()) return; // solo gerente ve la diferencia
+
+  const stockSistema = item.stockSistema || 0;
+  const cantContada  = item.qty; // ya actualizado
+  const diferencia   = cantContada - stockSistema;
+  const costo        = item.cost || item.price || 0;
+  const impacto      = diferencia * costo;
+
+  const panel = document.getElementById('diff-panel');
+
+  if (diferencia === 0) {
+    panel.className = 'diff-panel diff-ok show';
+    document.getElementById('diff-title').textContent = '✅ Coincide con el sistema';
+  } else if (diferencia < 0) {
+    panel.className = 'diff-panel diff-faltante show';
+    document.getElementById('diff-title').textContent = '🔴 FALTANTE detectado';
+  } else {
+    panel.className = 'diff-panel diff-sobrante show';
+    document.getElementById('diff-title').textContent = '🔵 SOBRANTE detectado';
+  }
+
+  document.getElementById('diff-nombre').textContent  = item.name;
+  document.getElementById('diff-sistema').textContent = `${stockSistema} un.`;
+  document.getElementById('diff-contada').textContent = `${cantContada} un.`;
+  document.getElementById('diff-dif').textContent     =
+    `${diferencia > 0 ? '+' : ''}${diferencia} un.`;
+  document.getElementById('diff-impacto').textContent =
+    costo > 0 ? `$${Math.abs(impacto).toLocaleString('es-AR')} (${diferencia < 0 ? 'pérdida' : 'excedente'})` : '—';
+
+  // Auto-ocultar después de 6 segundos
+  setTimeout(() => panel.classList.remove('show'), 6000);
+}
+
+
 function renderScanSearch() {
   const q   = (document.getElementById('scan-search').value || '').toLowerCase().trim();
   const res = document.getElementById('scan-search-results');
@@ -1988,6 +2068,7 @@ function confirmFoundProduct() {
   foundProductRef.lastOperator = operator.name;
   addAudit('update', `Cantidad actualizada +${addQty} → total ${foundProductRef.qty} un.`, foundProductRef.name);
   sendToSheets(foundProductRef);
+  mostrarDiferencia(foundProductRef, addQty);
   save();
   showToast(`✅ ${foundProductRef.name}: ${prev} → ${foundProductRef.qty} un.`);
   dismissFound();
