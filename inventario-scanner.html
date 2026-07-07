@@ -619,10 +619,54 @@
         <div class="export-icon">📥</div>
         <div class="export-info">
           <h3 style="color:var(--verde)">Importar desde Excel</h3>
-          <p>Cargá la plantilla completada con tus productos</p>
+          <p>Cargá el Maestro o la plantilla completada con tus productos</p>
         </div>
       </div>
       <input type="file" id="import-file" accept=".xlsx,.xls" style="display:none" onchange="importXLSX(this)">
+
+      <!-- DESCARGAR PLANTILLA -->
+      <div class="export-card" onclick="descargarPlantilla()" style="border-color:rgba(249,168,37,0.4);background:rgba(249,168,37,0.06)">
+        <div class="export-icon">📋</div>
+        <div class="export-info">
+          <h3 style="color:var(--amarillo)">Descargar plantilla de importación</h3>
+          <p>Plantilla vacía lista para completar y luego importar</p>
+        </div>
+      </div>
+
+      <!-- GUÍA DE FORMATO -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;">
+        <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:10px;">📌 Formatos aceptados para importar</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.9;">
+          La app acepta <strong style="color:var(--text)">dos formatos</strong> de Excel:
+        </div>
+        <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div style="background:rgba(0,200,83,0.08);border:1px solid rgba(0,200,83,0.2);border-radius:8px;padding:10px;">
+            <div style="font-size:11px;font-weight:800;color:var(--verde);margin-bottom:6px;">📦 Formato Maestro CLAROPE</div>
+            <div style="font-size:10px;color:var(--muted);line-height:1.8;">
+              • Código_Principal<br>
+              • Código_Alternativo<br>
+              • <strong style="color:var(--text)">Producto ✱</strong><br>
+              • Rubro<br>
+              • Stock_Sistema<br>
+              • Precio_Venta<br>
+              • Precio_Costo
+            </div>
+          </div>
+          <div style="background:rgba(249,168,37,0.08);border:1px solid rgba(249,168,37,0.2);border-radius:8px;padding:10px;">
+            <div style="font-size:11px;font-weight:800;color:var(--amarillo);margin-bottom:6px;">📋 Formato Plantilla propia</div>
+            <div style="font-size:10px;color:var(--muted);line-height:1.8;">
+              • codigo_barras<br>
+              • codigo_alternativo<br>
+              • <strong style="color:var(--text)">nombre ✱</strong><br>
+              • categoria<br>
+              • <strong style="color:var(--text)">cantidad ✱</strong><br>
+              • precio<br>
+              • stock_minimo
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:8px;font-size:10px;color:var(--muted);">✱ = columna obligatoria · Las demás son opcionales</div>
+      </div>
 
       <!-- GOOGLE SHEETS EN TIEMPO REAL -->
       <div class="export-card" onclick="showSheetsPanel()" style="border-color:rgba(21,101,192,0.4);background:rgba(21,101,192,0.06)">
@@ -1312,14 +1356,14 @@ function importXLSX(input) {
       const col = (...names) => { for (const n of names) { const i = headers.indexOf(n); if (i !== -1) return i; } return -1; };
 
       // Columnas — primero busca nombre de la plantilla, luego del Maestro CLAROPE
-      const iCod1    = col('codigo_barras',    'código_principal', 'codigo_principal');
-      const iCod2    = col('codigo_alternativo','código_alternativo');  // segundo código
-      const iName    = col('nombre',            'producto');
-      const iQty     = col('cantidad',          'stock_sistema');
-      const iPrice   = col('precio',            'precio_venta');
-      const iCost    = col('precio_costo');
-      const iCat     = col('categoria', 'rubro', 'rúbro', 'rubros', 'categoria ', 'rubro ');
-      const iMin     = col('stock_minimo');
+      const iCod1 = col('codigo_barras','código_principal','codigo_principal','cód. principal','cod. principal','codigo');
+      const iCod2 = col('codigo_alternativo','código_alternativo','cód. alternativo','cod. alternativo');
+      const iName = col('nombre','producto','nombre del producto');
+      const iQty  = col('cantidad','stock_sistema','cant. contada');
+      const iPrice= col('precio','precio_venta','precio unit.','precio unit');
+      const iCost = col('precio_costo','precio costo');
+      const iCat  = col('categoria','rubro','categoría');
+      const iMin  = col('stock_minimo','stock mín.','stock min');
 
       if (iName === -1) { showToast('❌ No se encontró columna Nombre o Producto', 'error'); return; }
 
@@ -1559,6 +1603,56 @@ function exportEscaneadosHoy() {
   const fname = `Escaneados_${(cat||'TODO').replace(/\s/g,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
   XLSX.writeFile(wb, fname);
   showToast(`✅ ${fname} descargado`);
+}
+
+// ══ DESCARGAR PLANTILLA ══
+function descargarPlantilla() {
+  const wb = XLSX.utils.book_new();
+
+  const data = [
+    ['PLANTILLA DE IMPORTACIÓN — INVENTARIO MINIMARKET CLAROPE'],
+    ['Completá desde la fila 4 · Columnas con ✱ son OBLIGATORIAS · No cambies los nombres de columnas'],
+    [],
+    ['Código_Principal','Código_Alternativo','Producto ✱','Rubro','Stock_Sistema','Precio_Venta','Precio_Costo','Observación'],
+    ['7790895000084','7790895000084','COCA COLA 500ML','BEBIDAS - GASEOSAS',10,7500,5000,'Ejemplo — borrar'],
+    ['7791813421305','','LECHE ENTERA 1L','PERECIBLES - LACTEOS - LECHE',5,8500,6000,'Ejemplo — borrar'],
+    ['','','MI PRODUCTO SIN CÓDIGO','ALMACEN - ARROZYGRANOS',3,1500,900,'Ejemplo — borrar'],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [{wch:18},{wch:18},{wch:30},{wch:30},{wch:14},{wch:14},{wch:14},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws, 'MAESTRO_PRODUCTOS');
+
+  const inst = [
+    ['INSTRUCCIONES DE USO'],[''],
+    ['COLUMNAS — NO CAMBIAR LOS NOMBRES'],
+    ['Código_Principal',   'Código EAN-13 principal (opcional pero recomendado)'],
+    ['Código_Alternativo', 'Segundo código si tiene dos (opcional)'],
+    ['Producto',           '✱ OBLIGATORIO — Nombre del producto'],
+    ['Rubro',              'Categoría (ej: BEBIDAS - GASEOSAS)'],
+    ['Stock_Sistema',      'Cantidad actual en el sistema'],
+    ['Precio_Venta',       'Precio de venta al público'],
+    ['Precio_Costo',       'Precio de costo'],
+    ['Observación',        'Notas adicionales'],[''],
+    ['PASOS PARA IMPORTAR'],
+    ['1','Completá productos desde fila 4 (borrá los ejemplos)'],
+    ['2','Guardá como .xlsx'],
+    ['3','Mandá al celular por WhatsApp o Google Drive'],
+    ['4','App → Exportar → Importar desde Excel → seleccioná este archivo'],[''],
+    ['RUBROS MÁS USADOS'],
+    ['BEBIDAS - GASEOSAS'],['BEBIDAS - CERVEZAS'],['BEBIDAS - SINALCOHOL - AGUAS'],
+    ['PERECIBLES - LACTEOS - LECHE'],['PERECIBLES - CARNICERIA'],['PERECIBLES - CONGELADOS'],
+    ['LIMPIEZA - LIMPIEZACOCINA'],['LIMPIEZA - LAVANDERIAROPA'],['LIMPIEZA - LIMPIEZABAÑOS'],
+    ['PERFUMERIA - DESODORANTES'],['PERFUMERIA - SHAMPOO'],['PERFUMERIA - HIGIENEBUCAL'],
+    ['PRODUCTOSDULCES - GALLETASDULCES'],['PRODUCTOSDULCES - SALADITOS'],['PRODUCTOSDULCES - BOMBONERIA - CHOCOLATES'],
+    ['ALMACEN - ARROZYGRANOS'],['ALMACEN - FIDEO'],['ALMACEN - ACEITE VINAGRES'],['ALMACEN - HARINAS'],
+    ['BAZAR - TABACO'],['BAZAR - RACIONES'],['BAZAR - DESCARTABLES'],
+  ];
+  const ws2 = XLSX.utils.aoa_to_sheet(inst);
+  ws2['!cols'] = [{wch:25},{wch:60}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'INSTRUCCIONES');
+
+  XLSX.writeFile(wb, 'Plantilla_Importacion_CLAROPE.xlsx');
+  showToast('✅ Plantilla descargada');
 }
 
 
