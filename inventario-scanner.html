@@ -1910,19 +1910,38 @@ function exportEscaneadosHoy() {
     ['PRODUCTOS ESCANEADOS' + (cat ? ' — ' + cat : ' — TODAS LAS CATEGORÍAS')],
     ['Generado por: ' + operator.name + ' · ' + nowStr()],
     [],
-    ['#','Código','Nombre','Categoría','Cantidad','Precio','Valor','Operador','Fecha/Hora']
+    ['#','Zona','Góndola','Nivel','Código','Cód. Alt.','Nombre','Categoría','Stock Sistema','Cant. Contada','Diferencia','Precio','Valor','Operador','Fecha/Hora']
   ];
   lista.forEach((item, idx) => {
-    data.push([idx+1, item.barcode||'', item.name, item.cat||'',
-      item.qty, item.price||0, item.qty*(item.price||0),
-      item.operator||'', item.datetime||'']);
+    const stockSist = item.stockSistema || 0;
+    const dif       = item.qty - stockSist;
+    data.push([
+      idx+1,
+      item.zona    || '',
+      item.gondola || '',
+      item.nivel   || '',
+      item.barcode ||'',
+      item.barcode2||'',
+      item.name,
+      item.cat||'',
+      stockSist,
+      item.qty,
+      dif,
+      item.price||0,
+      item.qty*(item.price||0),
+      item.operator||'',
+      item.datetime||''
+    ]);
   });
   data.push([]);
-  data.push(['','','TOTAL','', lista.reduce((s,i)=>s+i.qty,0),'',
-    lista.reduce((s,i)=>s+i.qty*(i.price||0),0)]);
+  data.push(['','','','','','TOTAL','',
+    lista.reduce((s,i)=>s+(i.stockSistema||0),0),
+    lista.reduce((s,i)=>s+i.qty,0),
+    lista.reduce((s,i)=>s+(i.qty-(i.stockSistema||0)),0)
+  ]);
 
   const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [{wch:4},{wch:16},{wch:28},{wch:18},{wch:10},{wch:12},{wch:14},{wch:18},{wch:20}];
+  ws['!cols'] = [{wch:4},{wch:14},{wch:10},{wch:10},{wch:16},{wch:14},{wch:28},{wch:22},{wch:13},{wch:13},{wch:12},{wch:12},{wch:14},{wch:18},{wch:20}];
   XLSX.utils.book_append_sheet(wb, ws, 'Escaneados');
 
   // Hoja de faltantes si hay maestro cargado
