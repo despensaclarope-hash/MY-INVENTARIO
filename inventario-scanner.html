@@ -2373,15 +2373,29 @@ function renderScanSearch() {
     return;
   }
 
+  // Deduplicar por nombre — si hay varios registros del mismo producto, mostrar uno solo con qty sumada
+  const invDedup = [];
+  const seenNames = new Set();
+  inInv.forEach(item => {
+    const key = item.name.toLowerCase().trim();
+    if (!seenNames.has(key)) {
+      seenNames.add(key);
+      // Sumar qty de todos los registros con mismo nombre
+      const totalQty = inInv.filter(i => i.name.toLowerCase().trim() === key).reduce((s,i) => s+i.qty, 0);
+      invDedup.push({ ...item, qty: totalQty, _originalId: item.id });
+    }
+  });
+
   let html = '';
 
-  if (inInv.length) {
-    html += `<div style="font-size:10px;font-weight:800;color:var(--verde);text-transform:uppercase;padding:4px 2px;">✅ Ya escaneados (${inInv.length})</div>`;
-    html += inInv.map((item, idx) => `
+  if (invDedup.length) {
+    html += `<div style="font-size:10px;font-weight:800;color:var(--verde);text-transform:uppercase;padding:4px 2px;">✅ Ya escaneados (${invDedup.length})</div>`;
+    html += invDedup.map((item, idx) => `
       <div style="background:rgba(0,200,83,0.1);border:1px solid rgba(0,200,83,0.25);border-radius:8px;padding:10px 12px;" id="sinv-${idx}">
         <div style="font-size:12px;font-weight:700;">${escHtml(item.name)}</div>
         <div style="font-size:10px;color:var(--muted);margin-top:3px;">
           🔢 ${escHtml(item.barcode||'—')}${item.barcode2 ? ' / '+escHtml(item.barcode2) : ''} · 📦 ${item.qty} un. · 🏷️ ${escHtml(item.cat||'—')}
+          ${item.zona ? ' · 📍 '+escHtml([item.zona,item.gondola,item.nivel].filter(Boolean).join(' › ')) : ''}
         </div>
         <div style="display:flex;gap:6px;margin-top:8px;">
           <button data-idx="${idx}" class="scan-res-add-qty" style="flex:1;background:var(--verde);border:none;color:#000;padding:6px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">➕ Sumar cantidad</button>
@@ -2404,30 +2418,35 @@ function renderScanSearch() {
 
   res.innerHTML = html;
 
-  // Events — add qty
+  // Eventos — sumar cantidad (usa el primer registro con ese nombre)
   res.querySelectorAll('.scan-res-add-qty').forEach(btn => {
     btn.addEventListener('click', () => {
-      const item = inInv[parseInt(btn.dataset.idx)];
-      const realIdx = inventory.findIndex(i => i.id === item.id);
-      showFoundPanel(inventory[realIdx]);
-      document.getElementById('scan-search').value = '';
-      res.innerHTML = '';
+      const item    = invDedup[parseInt(btn.dataset.idx)];
+      // Buscar el primer registro real con ese nombre
+      const realItem = inventory.find(i => i.name.toLowerCase().trim() === item.name.toLowerCase().trim());
+      if (realItem) {
+        showFoundPanel(realItem);
+        document.getElementById('scan-search').value = '';
+        res.innerHTML = '';
+      }
     });
   });
 
-  // Events — add alt code
+  // Eventos — agregar código alternativo
   res.querySelectorAll('.scan-res-add-cod2').forEach(btn => {
     btn.addEventListener('click', () => {
-      const item = inInv[parseInt(btn.dataset.idx)];
-      const realIdx = inventory.findIndex(i => i.id === item.id);
-      showFoundPanel(inventory[realIdx]);
-      toggleAddCod2();
-      document.getElementById('scan-search').value = '';
-      res.innerHTML = '';
+      const item     = invDedup[parseInt(btn.dataset.idx)];
+      const realItem = inventory.find(i => i.name.toLowerCase().trim() === item.name.toLowerCase().trim());
+      if (realItem) {
+        showFoundPanel(realItem);
+        toggleAddCod2();
+        document.getElementById('scan-search').value = '';
+        res.innerHTML = '';
+      }
     });
   });
 
-  // Events — preload from maestro
+  // Eventos — precargar desde maestro
   res.querySelectorAll('.scan-res-preload').forEach(btn => {
     btn.addEventListener('click', () => {
       const m = inMaestro[parseInt(btn.dataset.midx)];
