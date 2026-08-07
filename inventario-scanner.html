@@ -697,7 +697,10 @@
   <div id="tab-audit" class="section">
     <div class="table-header">
       <h2>📝 Registro de Auditoría</h2>
-      <button onclick="clearAudit()" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:7px;font-size:11px;cursor:pointer;font-family:var(--font);">Limpiar log</button>
+      <div style="display:flex;gap:8px;">
+        <button onclick="exportAuditoria()" style="background:var(--azul);border:none;color:#fff;padding:6px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);">📊 Exportar</button>
+        <button onclick="clearAudit()" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:7px;font-size:11px;cursor:pointer;font-family:var(--font);">🗑️ Limpiar</button>
+      </div>
     </div>
     <div id="audit-list" class="items-list"></div>
   </div>
@@ -1035,6 +1038,27 @@ function renderAudit() {
         </div>
       </div>
     </div>`).join('');
+}
+
+function exportAuditoria() {
+  if (!auditLog.length) { showToast('No hay registros de auditoría', 'warn'); return; }
+  const wb = XLSX.utils.book_new();
+  const data = [
+    ['REGISTRO DE AUDITORÍA — INVENTARIO MINIMARKET'],
+    [`Local: ${operator.store||'—'}   Exportado por: ${operator.name} (${operator.role})   Fecha: ${nowStr()}`],
+    [`Total de registros: ${auditLog.length}`],
+    [],
+    ['#','Tipo','Descripción','Producto','Operador','Rol','Fecha y Hora']
+  ];
+  auditLog.forEach((e, idx) => {
+    data.push([idx+1, e.type||'', e.desc||'', e.product||'', e.operator||'', e.role||'', e.datetime||'']);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [{wch:5},{wch:12},{wch:45},{wch:30},{wch:20},{wch:14},{wch:22}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Auditoría');
+  const fname = `Auditoria_${new Date().toISOString().slice(0,10)}.xlsx`;
+  XLSX.writeFile(wb, fname);
+  showToast(`✅ ${fname} descargado`);
 }
 
 function clearAudit() {
