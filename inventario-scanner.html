@@ -436,6 +436,13 @@
   <!-- ══════ SCAN ══════ -->
   <div id="tab-scan" class="section active">
 
+    <!-- Aviso: conteo sin exportar -->
+    <div id="aviso-respaldo" style="display:none;background:rgba(255,193,7,0.12);border:1px solid rgba(255,193,7,0.5);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:12px;">
+      ⚠️ <span>Hay conteos sin exportar.</span>
+      Exportá el Excel al terminar cada día: es tu respaldo si se borra el celular.
+      <button onclick="switchTab('export', document.querySelectorAll('.tab')[4])" style="margin-top:8px;width:100%;background:var(--amarillo);border:none;color:#000;padding:8px;border-radius:8px;font-weight:800;cursor:pointer;font-size:12px;">💾 Ir a Exportar</button>
+    </div>
+
     <!-- Timestamp live -->
     <div class="timestamp-display">
       <div class="ts-icon">🕐</div>
@@ -539,7 +546,7 @@
         <div class="found-icon">📦</div>
         <div>
           <div class="found-title" id="found-name">Producto encontrado</div>
-          <div class="found-sub">✅ Ya existe en el inventario — solo actualizá la cantidad</div>
+          <div class="found-sub">✅ Ya contado en este sector — sumá la cantidad</div>
         </div>
       </div>
       <div class="found-info">
@@ -552,7 +559,7 @@
           <div class="val" id="found-price">—</div>
         </div>
         <div class="found-field">
-          <label>Stock actual</label>
+          <label>Contado</label>
           <div class="val green" id="found-qty">—</div>
         </div>
         <div class="found-field">
@@ -562,7 +569,7 @@
       </div>
       <div class="found-qty-row">
         <label>➕ Agregar cantidad:</label>
-        <input id="found-add-qty" type="number" value="1" min="1" max="9999" inputmode="numeric">
+        <input id="found-add-qty" type="number" value="1" min="0" max="99999" step="any" inputmode="decimal">
       </div>
       <div class="found-actions">
         <button class="btn btn-primary" onclick="confirmFoundProduct()" style="flex:2">
@@ -616,7 +623,7 @@
         </div>
         <div>
           <label>Cantidad</label>
-          <input id="inp-qty" type="number" value="1" min="1" max="9999">
+          <input id="inp-qty" type="number" value="1" min="0" max="99999" step="any" inputmode="decimal">
         </div>
         <div>
           <label>Precio ($)</label>
@@ -778,7 +785,7 @@
         <div class="export-icon">📊</div>
         <div class="export-info">
           <h3>Exportar a Excel (.xlsx)</h3>
-          <p>Incluye inventario, auditoría y resumen por categoría</p>
+          <p>Hacelo al terminar cada día. Incluye la hoja "Para planilla" (una fila por producto y sector) y los totales</p>
         </div>
       </div>
 
@@ -797,6 +804,30 @@
         <div class="export-info">
           <h3>Copiar resumen</h3>
           <p>Para pegar en WhatsApp, email o notas</p>
+        </div>
+      </div>
+
+      <!-- RESPALDO -->
+      <div class="export-card" onclick="descargarRespaldo()">
+        <div class="export-icon">💾</div>
+        <div class="export-info">
+          <h3>Descargar copia de seguridad</h3>
+          <p>Guarda todo el conteo en un archivo. Sirve para recuperarlo en este u otro celular</p>
+        </div>
+      </div>
+      <div class="export-card" onclick="document.getElementById('restore-file').click()">
+        <div class="export-icon">♻️</div>
+        <div class="export-info">
+          <h3>Restaurar copia de seguridad</h3>
+          <p>Carga un archivo de respaldo (.json) y reemplaza el conteo actual</p>
+        </div>
+      </div>
+      <input type="file" id="restore-file" accept=".json,application/json" style="display:none" onchange="restaurarRespaldo(this)">
+      <div class="export-card" onclick="recuperarBorrado()">
+        <div class="export-icon">↩️</div>
+        <div class="export-info">
+          <h3>Recuperar lo último borrado</h3>
+          <p>Vuelve atrás el último "Borrar inventario" o la última restauración</p>
         </div>
       </div>
 
@@ -896,8 +927,8 @@ const ZONAS = {
   'TIENDA':            ['R1','R2','R3','R4','R5','R6','R7','R8','R9','R10','R11','R12','R13','R14','R15','C1','C2','C3','C4','C5','C6','C7','C8','C9','C10','C11'],
   'DEPOSITO INTERNO':  ['D1','D2','D3','D4','D5','D6','D7','D8','D9','D10','D11','D12','D13','S1','S2'],
   'DEPOSITO EXTERIOR': ['E1','E2','E3','E4','E5','E6','E7','E8','E9'],
-  'RECEPCION':         ['B1','B2','B3','B4','B5','B6','B7','T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11'],
-  'MESA DE TRABAJO':   ['Mesa 1','Mesa 2','Mesa 3','Mesa 4','Mesada','Balanza','Zona Prep.']
+  'RECEPCION':         ['B1','B2','B3','B4','B5','B6','B7'],
+  'MESA DE TRABAJO':   ['T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11']
 };
 
 // ══ TIMING ══
@@ -913,12 +944,141 @@ function cargarMaestro() {
     return JSON.parse(compact).map(m => ({
       barcode: m.b, barcode2: m.b2,
       name: m.n, cat: m.c, rubro: m.c,
-      qty: m.q, price: m.p, cost: 0
+      qty: m.q, price: m.p, cost: m.k || 0
     }));
   }
   return [];
 }
 let maestro = cargarMaestro();
+
+// ══ CÓDIGOS, SECTOR Y MAESTRO (v2) ══
+const normCod = c => (c === null || c === undefined) ? '' : String(c).trim();
+function codigosDe(x) { return x ? [normCod(x.barcode), normCod(x.barcode2)].filter(Boolean) : []; }
+function nombreNorm(x) { return String((x && x.name) || '').trim().toLowerCase(); }
+function redondear(n) { return Math.round((parseFloat(n) || 0) * 1000) / 1000; }
+function leerCantidad(id, porDefecto) {
+  const v = String(document.getElementById(id).value || '').replace(',', '.').trim();
+  const n = parseFloat(v);
+  return isNaN(n) ? porDefecto : redondear(n);
+}
+// Busca en el maestro por cualquiera de los dos códigos
+function buscarMaestro(code) {
+  code = normCod(code);
+  if (!code || !maestro.length) return null;
+  return maestro.find(m => codigosDe(m).includes(code)) || null;
+}
+function maestroDe(item) {
+  for (const c of codigosDe(item)) { const m = buscarMaestro(c); if (m) return m; }
+  const n = nombreNorm(item);
+  return n ? (maestro.find(m => nombreNorm(m) === n) || null) : null;
+}
+// Dos registros son el mismo producto si comparten algún código, o el nombre si no tienen códigos
+function mismoProducto(a, b) {
+  const ca = codigosDe(a), cb = codigosDe(b);
+  if (ca.length && cb.length) return ca.some(c => cb.includes(c));
+  return nombreNorm(a) !== '' && nombreNorm(a) === nombreNorm(b);
+}
+function mismoSector(item) {
+  return (item.zona || '') === (ubicacion.zona || '') && (item.gondola || '') === (ubicacion.gondola || '');
+}
+function hayUbicacion() { return !!(ubicacion.zona && ubicacion.gondola); }
+function textoSector(item) { return item.gondola || item.zona || 'sin sector'; }
+// Registros del mismo producto (todos los sectores)
+function registrosDe(item) { return inventory.filter(i => mismoProducto(i, item)); }
+function totalContado(item) { return redondear(registrosDe(item).reduce((s, i) => s + (i.qty || 0), 0)); }
+function detalleSectores(item) {
+  return registrosDe(item).map(i => `${textoSector(i)}: ${i.qty}`).join(' · ');
+}
+// Completa códigos, stock del sistema, costo y rubro desde el maestro
+function completarDesdeMaestro(item) {
+  const m = maestroDe(item);
+  if (!m) return item;
+  const cods = [...new Set([...codigosDe(m), ...codigosDe(item)])];
+  item.barcode  = cods[0] || '';
+  item.barcode2 = cods[1] || '';
+  item.stockSistema = parseFloat(m.qty) || 0;
+  if (!item.cost && m.cost)   item.cost  = m.cost;
+  if (!item.price && m.price) item.price = m.price;
+  if (!item.cat && (m.cat || m.rubro)) item.cat = m.cat || m.rubro;
+  item.enMaestro = true;
+  return item;
+}
+// Registros viejos (antes de esta versión) toman el stock del sistema del maestro
+function migrarInventario() {
+  let cambios = 0;
+  inventory.forEach(i => {
+    if (i.stockSistema === undefined || !i.barcode2) {
+      const antes = JSON.stringify([i.stockSistema, i.barcode, i.barcode2]);
+      completarDesdeMaestro(i);
+      if (JSON.stringify([i.stockSistema, i.barcode, i.barcode2]) !== antes) cambios++;
+    }
+  });
+  if (cambios) localStorage.setItem('mm_inv', JSON.stringify(inventory));
+}
+migrarInventario();
+
+// ══ RESPALDO ══
+// Pide al navegador que no borre los datos de la app por falta de espacio
+if (navigator.storage && navigator.storage.persist) { navigator.storage.persist().catch(() => {}); }
+function hoyISO() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function marcarExportado() {
+  localStorage.setItem('mm_last_export', new Date().toISOString());
+  actualizarAvisoRespaldo();
+}
+function actualizarAvisoRespaldo() {
+  const el = document.getElementById('aviso-respaldo');
+  if (!el) return;
+  const ult = localStorage.getItem('mm_last_export') || '';
+  const ultMod = inventory.reduce((mx, i) => { const t = i.lastIso || i.iso || ''; return t > mx ? t : mx; }, '');
+  const pendiente = inventory.length && ultMod && ultMod > ult;
+  el.style.display = pendiente ? 'block' : 'none';
+  if (pendiente) {
+    el.querySelector('span').textContent = ult
+      ? `Hay conteos sin exportar desde el ${new Date(ult).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}.`
+      : 'Todavía no exportaste este conteo.';
+  }
+}
+function descargarRespaldo() {
+  const data = { app: 'inventario-clarope', version: 2, fecha: new Date().toISOString(), inventory, auditLog, ubicacion };
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `Respaldo_inventario_${hoyISO()}_${String(new Date().getHours()).padStart(2,'0')}${String(new Date().getMinutes()).padStart(2,'0')}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  marcarExportado();
+  showToast('💾 Respaldo descargado');
+}
+function restaurarRespaldo(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!Array.isArray(data.inventory)) throw new Error('formato');
+      if (!confirm(`Restaurar respaldo del ${new Date(data.fecha).toLocaleString('es-AR')} con ${data.inventory.length} registros?\nReemplaza el conteo actual (${inventory.length} registros).`)) return;
+      localStorage.setItem('mm_inv_prev', JSON.stringify(inventory));
+      inventory = data.inventory;
+      if (Array.isArray(data.auditLog)) auditLog = data.auditLog;
+      addAudit('system', `Respaldo restaurado (${inventory.length} registros)`, null);
+      save();
+      showToast('✅ Respaldo restaurado');
+    } catch (err) { showToast('❌ El archivo no es un respaldo válido', 'error'); }
+    input.value = '';
+  };
+  r.readAsText(file);
+}
+function recuperarBorrado() {
+  const prev = localStorage.getItem('mm_inv_prev');
+  if (!prev) { showToast('No hay nada borrado para recuperar', 'warn'); return; }
+  const arr = JSON.parse(prev);
+  if (!confirm(`Recuperar ${arr.length} registros que estaban antes del último borrado o restauración?\nReemplaza el conteo actual (${inventory.length} registros).`)) return;
+  localStorage.setItem('mm_inv_prev', JSON.stringify(inventory));
+  inventory = arr;
+  addAudit('system', `Conteo recuperado (${inventory.length} registros)`, null);
+  save();
+  showToast('✅ Conteo recuperado');
+}
 
 // ══ HELPERS ══
 function nowStr() {
@@ -1000,6 +1160,7 @@ function refreshAll() {
   checkLowStock();
   updateProgresoSelector();
   renderProgreso();
+  actualizarAvisoRespaldo();
 }
 
 // ══ AUDIT LOG ══
@@ -1158,29 +1319,34 @@ function addProduct() {
   const name     = document.getElementById('inp-name').value.trim();
   const barcode  = document.getElementById('inp-barcode').value.trim();
   const barcode2 = document.getElementById('inp-barcode2').value.trim();
-  const qty      = parseInt(document.getElementById('inp-qty').value) || 1;
+  const qty      = leerCantidad('inp-qty', 1);
   const price    = parseFloat(document.getElementById('inp-price').value) || 0;
   const cat      = document.getElementById('inp-cat').value;
   const minStock = parseInt(document.getElementById('inp-min').value) || 0;
   const dt       = nowStr();
 
   if (!name) { showToast('⚠️ Ingresá el nombre del producto', 'warn'); document.getElementById('inp-name').focus(); return; }
+  if (!hayUbicacion()) { avisarSinUbicacion(); return; }
 
-  // barcode exists → update qty
-  if (barcode) {
-    const existing = inventory.find(i => i.barcode === barcode);
-    if (existing) {
-      existing.qty += qty;
-      existing.lastUpdate    = dt;
-      existing.lastOperator  = operator.name;
-      addAudit('update', `Cantidad actualizada +${qty} → total ${existing.qty} un.`, existing.name);
-      showToast(`✅ ${existing.name}: ahora ${existing.qty} un.`);
-      save(); clearForm(); return;
-    }
+  // Mismo producto (por cualquiera de los dos códigos) ya contado EN ESTE SECTOR → sumar ahí
+  const nuevo = completarDesdeMaestro({ barcode, barcode2, name });
+  const existing = inventory.find(i => mismoSector(i) && mismoProducto(i, nuevo));
+  if (existing) {
+    existing.qty = redondear(existing.qty + qty);
+    existing.lastUpdate    = dt;
+    existing.lastIso       = nowISO();
+    existing.lastOperator  = operator.name;
+    if (!existing.barcode2 && nuevo.barcode2) { existing.barcode = nuevo.barcode; existing.barcode2 = nuevo.barcode2; }
+    addAudit('update', `Cantidad actualizada +${qty} → ${existing.qty} en ${textoSector(existing)}`, existing.name);
+    mostrarDiferencia(existing, qty);
+    save();
+    showToast(`✅ ${existing.name}: ${existing.qty} en ${textoSector(existing)} · total ${totalContado(existing)}`);
+    clearForm(); return;
   }
 
   const item = {
-    id: Date.now(), barcode, barcode2, name, qty, price, cat, minStock,
+    id: Date.now(), barcode: nuevo.barcode || barcode, barcode2: nuevo.barcode2 || barcode2,
+    name, qty, price, cat, minStock,
     zona:    ubicacion.zona    || '',
     gondola: ubicacion.gondola || '',
     nivel:   ubicacion.nivel   || '',
@@ -1189,8 +1355,10 @@ function addProduct() {
     store:    operator.store || '',
     datetime: dt,
     iso:      nowISO(),
+    lastIso:  nowISO(),
     lastUpdate: null, lastOperator: null
   };
+  completarDesdeMaestro(item);
 
   inventory.unshift(item);
   addAudit('add', `Producto agregado — ${qty} un. · $${price} · 📍${[ubicacion.zona,ubicacion.gondola,ubicacion.nivel].filter(Boolean).join(' › ')||'sin ubicación'}`, name);
@@ -1210,11 +1378,12 @@ function addProduct() {
 }
 
 function changeQty(idx, delta) {
-  const newQty = (inventory[idx].qty || 0) + delta;
+  const newQty = redondear((inventory[idx].qty || 0) + delta);
   if (newQty < 0) return;
   const prev = inventory[idx].qty;
   inventory[idx].qty = newQty;
   inventory[idx].lastUpdate   = nowStr();
+  inventory[idx].lastIso      = nowISO();
   inventory[idx].lastOperator = operator.name;
   addAudit('update', `Cantidad: ${prev} → ${newQty}`, inventory[idx].name);
   save();
@@ -1239,6 +1408,7 @@ function clearAll() {
   const msg = opciones.join('\n') + '\n\n¿Confirmar? Escribí:\n1 = solo inventario\n2 = solo maestro\n3 = todo';
   const resp = prompt(msg);
   if (!resp) return;
+  if ((resp === '1' || resp === '3') && inventory.length) localStorage.setItem('mm_inv_prev', JSON.stringify(inventory));
 
   if (resp === '1' && inventory.length) {
     addAudit('system', `Inventario borrado completo (${inventory.length} productos)`, null);
@@ -1359,9 +1529,59 @@ function stopScanner() {
 }
 
 // ══ EXPORT XLSX ══
+function fechaDe(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d) ? '' : `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function horaDe(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d) ? '' : `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+// Hoja pensada para cruzar con la planilla de inventario rotativo: una fila por producto y sector
+function hojaParaPlanilla() {
+  const rows = [['Código','Código alternativo','Producto','Rubro','Área','Sector','Nivel','Cantidad contada',
+                 'Stock sistema','Fecha','Hora','Contó','En maestro']];
+  [...inventory].sort((a,b) => (a.gondola||'').localeCompare(b.gondola||'') || a.name.localeCompare(b.name))
+    .forEach(i => {
+      const t = i.lastIso || i.iso;
+      rows.push([i.barcode||'', i.barcode2||'', i.name, i.cat||'', i.zona||'', i.gondola||'', i.nivel||'',
+                 i.qty, i.stockSistema ?? '', fechaDe(t), horaDe(t), i.lastOperator || i.operator || '', i.enMaestro ? 'Sí' : 'No']);
+    });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:15},{wch:15},{wch:38},{wch:28},{wch:17},{wch:8},{wch:8},{wch:10},{wch:10},{wch:11},{wch:6},{wch:14},{wch:9}];
+  ws['!autofilter'] = { ref: `A1:M${rows.length}` };
+  return ws;
+}
+// Un renglón por producto con el total de todos los sectores
+function hojaTotales() {
+  const grupos = [];
+  inventory.forEach(i => {
+    const g = grupos.find(x => mismoProducto(x.ref, i));
+    if (g) g.items.push(i); else grupos.push({ ref: i, items: [i] });
+  });
+  const rows = [['Código','Código alternativo','Producto','Rubro','Sectores','Total contado','Stock sistema','Diferencia','Último conteo']];
+  grupos.sort((a,b) => a.ref.name.localeCompare(b.ref.name)).forEach(g => {
+    const tot = redondear(g.items.reduce((s,i) => s + (i.qty||0), 0));
+    const st  = g.items.find(i => i.stockSistema !== undefined)?.stockSistema;
+    const ult = g.items.map(i => i.lastIso || i.iso || '').sort().pop();
+    const cods = [...new Set(g.items.flatMap(codigosDe))];
+    rows.push([cods[0]||'', cods[1]||'', g.ref.name, g.ref.cat||'',
+               g.items.map(i => `${textoSector(i)}: ${i.qty}`).join(' · '),
+               tot, st ?? '', st === undefined ? '' : redondear(tot - st), fechaDe(ult)]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:15},{wch:15},{wch:38},{wch:28},{wch:30},{wch:10},{wch:10},{wch:10},{wch:11}];
+  ws['!autofilter'] = { ref: `A1:I${rows.length}` };
+  return ws;
+}
+
 function exportXLSX() {
   if (!inventory.length) { showToast('No hay productos para exportar','warn'); return; }
   const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, hojaParaPlanilla(), 'Para planilla');
+  XLSX.utils.book_append_sheet(wb, hojaTotales(), 'Totales por producto');
   const store = operator.store ? ` — ${operator.store}` : '';
 
   // Sheet 1: Inventario escaneado
@@ -1604,6 +1824,7 @@ function exportXLSX() {
   XLSX.utils.book_append_sheet(wb, ws3, 'Por Categoría');
 
   const now = new Date();
+  marcarExportado();
   const fname = `Inventario_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.xlsx`;
   XLSX.writeFile(wb, fname);
   showToast(`✅ ${fname} descargado`);
@@ -1685,11 +1906,12 @@ function importXLSX(input) {
 
       // Acepta formato CLAROPE, plantilla propia, y el Excel del usuario
       const iCod1 = col('codigo','código','codigo_barras','código_principal','codigo_principal','cód. principal','cod. principal');
-      const iCod2 = col('codigo de barras','código de barras','codigo_alternativo','código_alternativo','cód. alternativo','cod. alternativo');
+      let   iCod2 = col('codigobarras','codigo de barras','código de barras','codigo_alternativo','código_alternativo','cód. alternativo','cod. alternativo');
+      if (iCod2 === iCod1) iCod2 = -1;
       const iName = col('nombre','producto','nombre del producto','name');
-      const iQty  = col('cantidad','stock_sistema','stock sistema','existencia','stock','cant. contada','qty');
-      const iPrice= col('precio bruto','precio brut','precio_venta','precio venta','precio unit.','precio unit','precio','price');
-      const iCost = col('precio_costo','precio costo','costo','cost');
+      const iQty  = col('cantidadstock','cantidad stock','cantidad','stock_sistema','stock sistema','existencia','stock','cant. contada','qty');
+      const iPrice= col('precioconTasaBonificadoView'.toLowerCase(),'precio bruto','precio brut','precio_venta','precio venta','precio unit.','precio unit','precio','price');
+      const iCost = col('costo(c/iva)','costo c/iva','precio_costo','precio costo','costo','cost');
       const iCat  = col('rubro','categoria','categoría','category');
       const iMin  = col('stock_minimo','stock mín.','stock min');
 
@@ -1716,16 +1938,19 @@ function importXLSX(input) {
         const cod1Raw = iCod1 >= 0 ? row[iCod1] : '';
         const cod2Raw = iCod2 >= 0 ? row[iCod2] : '';
         // Si es número (ej: 1, 2, 3 o EAN-13 como número) convertir a string sin decimales
-        const cod1 = cod1Raw !== '' && cod1Raw !== null && cod1Raw !== undefined
+        let cod1 = cod1Raw !== '' && cod1Raw !== null && cod1Raw !== undefined
           ? (typeof cod1Raw === 'number' ? Math.round(cod1Raw).toString() : String(cod1Raw)).trim()
           : '';
-        const cod2 = cod2Raw !== '' && cod2Raw !== null && cod2Raw !== undefined
+        let cod2 = cod2Raw !== '' && cod2Raw !== null && cod2Raw !== undefined
           ? (typeof cod2Raw === 'number' ? Math.round(cod2Raw).toString() : String(cod2Raw)).trim()
           : '';
+        if (cod2 === cod1) cod2 = '';
+        if (!cod1 && cod2) { cod1 = cod2; cod2 = ''; }
 
-        const qty   = parseFloat(row[iQty])  || 0;  // float para productos por kilo
-        const price = parseFloat(row[iPrice]) || 0;
-        const cost  = iCost >= 0 ? parseFloat(row[iCost]) || 0 : 0;
+        const num   = v => parseFloat(String(v).replace(',', '.')) || 0;
+        const qty   = iQty >= 0   ? num(row[iQty])   : 0;  // float para productos por kilo
+        const price = iPrice >= 0 ? num(row[iPrice]) : 0;
+        const cost  = iCost >= 0  ? num(row[iCost])  : 0;
         const cat   = iCat >= 0  ? String(row[iCat] || '').trim() : '';
         const minStock = iMin >= 0 ? parseFloat(row[iMin]) || 0 : 0;
 
@@ -1777,6 +2002,7 @@ function importXLSX(input) {
               c:  m.cat      || '',
               q:  m.qty      || 0,
               p:  m.price    || 0,
+              k:  m.cost     || 0,
             }));
             localStorage.setItem('mm_maestro_compact', JSON.stringify(maestroCompact));
             localStorage.removeItem('mm_maestro');
@@ -1795,6 +2021,7 @@ function importXLSX(input) {
 
       if (isMaestro) {
         addAudit('system', `Maestro importado: ${added} productos de referencia (${skipped} sin nombre omitidos)`, null);
+        inventory.forEach(i => completarDesdeMaestro(i));
         save();
         showToast(`✅ Maestro: ${added} productos cargados${skipped ? ' · ' + skipped + ' omitidos' : ''}`);
       } else {
@@ -1907,15 +2134,17 @@ function renderProgreso() {
     // Agregar eventos después de renderizar para evitar problemas con comillas en onclick
     sinEscanear.forEach((m, idx) => {
       const el = document.getElementById(`falta-${idx}`);
-      if (el) el.addEventListener('click', () => precargarDesdeProgreso(m.barcode||'', m.name||'', m.cat||'', m.price||0));
+      if (el) el.addEventListener('click', () => precargarDesdeProgreso(m.barcode||'', m.name||'', m.cat||'', m.price||0, m.barcode2||''));
     });
   }
 }
 
 // Toca un producto faltante → va a la pestaña escanear con datos precargados
-function precargarDesdeProgreso(barcode, name, cat, price) {
+function precargarDesdeProgreso(barcode, name, cat, price, barcode2) {
   switchTab('scan', document.querySelectorAll('.tab')[0]);
+  dismissFound();
   document.getElementById('inp-barcode').value = barcode;
+  document.getElementById('inp-barcode2').value = barcode2 || '';
   document.getElementById('inp-name').value    = name;
   document.getElementById('inp-cat').value     = cat;
   document.getElementById('inp-price').value   = price;
@@ -2357,8 +2586,8 @@ function mostrarDiferencia(item, cantidadAgregada) {
   if (!esGerente()) return; // solo gerente ve la diferencia
 
   const stockSistema = item.stockSistema || 0;
-  const cantContada  = item.qty; // ya actualizado
-  const diferencia   = cantContada - stockSistema;
+  const cantContada  = totalContado(item); // suma de todos los sectores
+  const diferencia   = redondear(cantContada - stockSistema);
   const costo        = item.cost || item.price || 0;
   const impacto      = diferencia * costo;
 
@@ -2465,13 +2694,13 @@ function renderScanSearch() {
   res.querySelectorAll('.scan-res-add-qty').forEach(btn => {
     btn.addEventListener('click', () => {
       const item    = invDedup[parseInt(btn.dataset.idx)];
-      // Buscar el primer registro real con ese nombre
-      const realItem = inventory.find(i => i.name.toLowerCase().trim() === item.name.toLowerCase().trim());
-      if (realItem) {
-        showFoundPanel(realItem);
-        document.getElementById('scan-search').value = '';
-        res.innerHTML = '';
-      }
+      if (!hayUbicacion()) { avisarSinUbicacion(); return; }
+      // Registro de ESTE sector; si no hay, se precarga uno nuevo para este sector
+      const realItem = inventory.find(i => mismoSector(i) && mismoProducto(i, item));
+      document.getElementById('scan-search').value = '';
+      res.innerHTML = '';
+      if (realItem) showFoundPanel(realItem);
+      else precargarDesdeProgreso(item.barcode || '', item.name || '', item.cat || '', item.price || 0, item.barcode2 || '');
     });
   });
 
@@ -2493,7 +2722,7 @@ function renderScanSearch() {
   res.querySelectorAll('.scan-res-preload').forEach(btn => {
     btn.addEventListener('click', () => {
       const m = inMaestro[parseInt(btn.dataset.midx)];
-      precargarDesdeProgreso(m.barcode||'', m.name||'', m.cat||'', m.price||0);
+      precargarDesdeProgreso(m.barcode||'', m.name||'', m.cat||'', m.price||0, m.barcode2||'');
       document.getElementById('scan-search').value = '';
       res.innerHTML = '';
     });
@@ -2538,37 +2767,44 @@ document.getElementById('inp-barcode').addEventListener('change', function() {
   if (code) lookupBarcode(code);
 });
 
+function avisarSinUbicacion() {
+  showToast('📍 Elegí la zona y el sector (góndola) antes de contar', 'warn');
+  const sel = document.getElementById('ubicacion-selector');
+  if (sel && sel.style.display === 'none') toggleUbicacionPanel();
+  sel && sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 function lookupBarcode(code) {
-  // Normalizar código — quitar ceros a la izquierda no intencionados y espacios
-  const codeNorm = String(code).trim();
+  const codeNorm = normCod(code);
+  if (!codeNorm) return;
+  if (!hayUbicacion()) { avisarSinUbicacion(); return; }
 
-  // 1. Buscar en inventario ya escaneado por cod1 o cod2
-  const existing = inventory.find(i =>
-    (i.barcode  && String(i.barcode).trim()  === codeNorm) ||
-    (i.barcode2 && String(i.barcode2).trim() === codeNorm)
-  );
-  if (existing) {
-    showFoundPanel(existing);
-    return;
-  }
+  // El producto puede venir por el código principal o el alternativo
+  const enMaestro = buscarMaestro(codeNorm);
+  const ref = enMaestro || inventory.find(i => codigosDe(i).includes(codeNorm)) || { barcode: codeNorm };
 
-  // 2. Buscar en Maestro para precargar datos completos
-  const enMaestro = maestro.find(m =>
-    (m.barcode  && String(m.barcode).trim()  === codeNorm) ||
-    (m.barcode2 && String(m.barcode2).trim() === codeNorm)
-  );
+  // 1. Ya contado EN ESTE SECTOR → sumar a ese registro
+  const enSector = inventory.find(i => mismoSector(i) && (codigosDe(i).includes(codeNorm) || mismoProducto(i, ref)));
+  if (enSector) { showFoundPanel(enSector); return; }
 
   dismissFound();
 
-  if (enMaestro) {
-    // Precargar TODOS los datos del maestro en el formulario
-    const catVal = enMaestro.cat || enMaestro.rubro || '';
-    document.getElementById('inp-name').value  = enMaestro.name  || '';
-    document.getElementById('inp-cat').value   = catVal;
-    document.getElementById('inp-price').value = enMaestro.price || '';
-    showToast(`📋 ${enMaestro.name} | Cat: ${catVal || 'SIN CATEGORÍA'}`);
+  // 2. Contado en otro sector, o nuevo → registro nuevo para este sector
+  const otros = inventory.filter(i => codigosDe(i).includes(codeNorm) || mismoProducto(i, ref));
+  const base = enMaestro || otros[0] || null;
+  if (base) {
+    const otroCod = codigosDe(base).find(c => c !== codeNorm) || '';
+    document.getElementById('inp-barcode2').value = otroCod;
+    document.getElementById('inp-name').value  = base.name  || '';
+    document.getElementById('inp-cat').value   = base.cat || base.rubro || '';
+    document.getElementById('inp-price').value = base.price || '';
+    if (otros.length) {
+      showToast(`📍 ${base.name}: ya contado en ${otros.map(o => `${textoSector(o)} (${o.qty})`).join(', ')} — esto se suma como ${ubicacion.gondola}`);
+    } else {
+      showToast(`📋 ${base.name}${enMaestro ? ` · sistema: ${enMaestro.qty || 0}` : ''}`);
+    }
   } else {
-    showToast(`🔢 Código: ${code} — completá los datos`);
+    showToast(`🔢 Código ${codeNorm} no está en el maestro — completá los datos`, 'warn');
   }
   document.getElementById('inp-qty').focus();
 }
@@ -2578,7 +2814,9 @@ function showFoundPanel(item) {
   document.getElementById('found-name').textContent  = item.name;
   document.getElementById('found-cat').textContent   = item.cat  || '—';
   document.getElementById('found-price').textContent = item.price ? '$' + Number(item.price).toLocaleString('es-AR',{minimumFractionDigits:2}) : '—';
-  document.getElementById('found-qty').textContent   = item.qty + ' un.';
+  const tot = totalContado(item);
+  document.getElementById('found-qty').textContent   = `${item.qty} en ${textoSector(item)}` +
+    (tot !== item.qty ? ` · total ${tot} (${detalleSectores(item)})` : '');
   document.getElementById('found-op').textContent    = (item.operator || '—') + (item.datetime ? '\n' + item.datetime : '');
 
   // hide the regular form, show found panel
@@ -2606,21 +2844,21 @@ function dismissFound(forceNew) {
 
 function confirmFoundProduct() {
   if (!foundProductRef) return;
-  const addQty = parseInt(document.getElementById('found-add-qty').value) || 1;
+  const addQty = leerCantidad('found-add-qty', 1);
   const prev   = foundProductRef.qty;
-  foundProductRef.qty         += addQty;
+  foundProductRef.qty          = redondear(foundProductRef.qty + addQty);
   foundProductRef.lastUpdate   = nowStr();
+  foundProductRef.lastIso      = nowISO();
   foundProductRef.lastOperator = operator.name;
-  // Actualizar ubicación con la seleccionada actualmente
-  foundProductRef.zona    = ubicacion.zona    || foundProductRef.zona    || '';
-  foundProductRef.gondola = ubicacion.gondola || foundProductRef.gondola || '';
-  foundProductRef.nivel   = ubicacion.nivel   || foundProductRef.nivel   || '';
+  // El sector NO se cambia: cada sector tiene su propio registro
+  if (ubicacion.nivel) foundProductRef.nivel = ubicacion.nivel;
+  completarDesdeMaestro(foundProductRef);
   addAudit('update', `+${addQty} un. → total ${foundProductRef.qty} · 📍${[ubicacion.zona,ubicacion.gondola,ubicacion.nivel].filter(Boolean).join(' › ')||'sin ubicación'}`, foundProductRef.name);
   registrarTiempoProducto();
   sendToSheets(foundProductRef);
   mostrarDiferencia(foundProductRef, addQty);
   save();
-  showToast(`✅ ${foundProductRef.name}: ${prev} → ${foundProductRef.qty} un.`);
+  showToast(`✅ ${foundProductRef.name}: ${prev} → ${foundProductRef.qty} en ${textoSector(foundProductRef)} · total ${totalContado(foundProductRef)}`);
   dismissFound();
   clearForm();
 }
