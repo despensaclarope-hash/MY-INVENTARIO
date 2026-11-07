@@ -2817,29 +2817,45 @@ function lookupBarcode(code) {
   const enMaestro = buscarMaestro(codeNorm);
   const ref = enMaestro || inventory.find(i => codigosDe(i).includes(codeNorm)) || { barcode: codeNorm };
 
-  // 1. Ya contado EN ESTE SECTOR → sumar a ese registro
+  // 1. Ya contado EN ESTE SECTOR → panel verde
   const enSector = inventory.find(i => mismoSector(i) && (codigosDe(i).includes(codeNorm) || mismoProducto(i, ref)));
   if (enSector) { showFoundPanel(enSector); return; }
 
+  // 2. Ya contado en OTRO sector → también panel verde (con aviso de sector)
+  const enOtroSector = inventory.find(i => !mismoSector(i) && (codigosDe(i).includes(codeNorm) || mismoProducto(i, ref)));
+  if (enOtroSector) {
+    showFoundPanel(enOtroSector);
+    const todos = registrosDe(enOtroSector);
+    const sectores = todos.map(o => `${textoSector(o)} (${o.qty})`).join(', ');
+    showToast(`📍 ${enOtroSector.name}: ya en ${sectores} — se agrega en ${ubicacion.gondola}`);
+    return;
+  }
+
+  // 3. Está en el maestro (archivo subido) pero aún no escaneado → panel verde del maestro
+  if (enMaestro) {
+    // Crear un item temporal con datos del maestro para mostrar en el panel
+    const itemMaestro = {
+      name:     enMaestro.name  || '',
+      cat:      enMaestro.cat   || enMaestro.rubro || '',
+      price:    enMaestro.price || '',
+      qty:      enMaestro.qty   || 0,
+      barcode:  codeNorm,
+      barcode2: codigosDe(enMaestro).find(c => c !== codeNorm) || '',
+      zona:     '',
+      gondola:  '',
+      operator: '',
+      datetime: '',
+      _desdeMaestro: true   // marca para saber que no fue escaneado aún
+    };
+    showFoundPanel(itemMaestro);
+    showToast(`📋 ${enMaestro.name} · stock sistema: ${enMaestro.qty || 0}`);
+    return;
+  }
+
   dismissFound();
 
-  // 2. Contado en otro sector, o nuevo → registro nuevo para este sector
-  const otros = inventory.filter(i => codigosDe(i).includes(codeNorm) || mismoProducto(i, ref));
-  const base = enMaestro || otros[0] || null;
-  if (base) {
-    const otroCod = codigosDe(base).find(c => c !== codeNorm) || '';
-    document.getElementById('inp-barcode2').value = otroCod;
-    document.getElementById('inp-name').value  = base.name  || '';
-    document.getElementById('inp-cat').value   = base.cat || base.rubro || '';
-    document.getElementById('inp-price').value = base.price || '';
-    if (otros.length) {
-      showToast(`📍 ${base.name}: ya contado en ${otros.map(o => `${textoSector(o)} (${o.qty})`).join(', ')} — esto se suma como ${ubicacion.gondola}`);
-    } else {
-      showToast(`📋 ${base.name}${enMaestro ? ` · sistema: ${enMaestro.qty || 0}` : ''}`);
-    }
-  } else {
-    showToast(`🔢 Código ${codeNorm} no está en el maestro — completá los datos`, 'warn');
-  }
+  // 4. Producto completamente nuevo (no está en maestro ni en inventario)
+  showToast(`🔢 Código ${codeNorm} no está en el maestro — completá los datos`, 'warn');
   document.getElementById('inp-qty').focus();
 }
 
@@ -2849,8 +2865,9 @@ function showFoundPanel(item) {
   document.getElementById('found-cat').textContent   = item.cat  || '—';
   document.getElementById('found-price').textContent = item.price ? '$' + Number(item.price).toLocaleString('es-AR',{minimumFractionDigits:2}) : '—';
   const tot = totalContado(item);
-  document.getElementById('found-qty').textContent   = `${item.qty} en ${textoSector(item)}` +
-    (tot !== item.qty ? ` · total ${tot} (${detalleSectores(item)})` : '');
+  document.getElementById('found-qty').textContent   = item._desdeMaestro
+    ? `stock sistema: ${item.qty}`
+    : (`${item.qty} en ${textoSector(item)}` + (tot !== item.qty ? ` · total ${tot} (${detalleSectores(item)})` : ''));
   document.getElementById('found-op').textContent    = (item.operator || '—') + (item.datetime ? '\n' + item.datetime : '');
 
   // hide the regular form, show found panel
@@ -2879,7 +2896,41 @@ function dismissFound(forceNew) {
 function confirmFoundProduct() {
   if (!foundProductRef) return;
   const addQty = leerCantidad('found-add-qty', 1);
-  const prev   = foundProductRef.qty;
+
+  // Si el item viene del maestro (aún no fue escaneado), crear nuevo registro en inventory
+  if (foundProductRef._desdeMaestro) {
+    const nuevoItem = {
+      barcode:   foundProductRef.barcode  || '',
+      barcode2:  foundProductRef.barcode2 || '',
+      name:      foundProductRef.name     || '',
+      cat:       foundProductRef.cat      || '',
+      price:     foundProductRef.price    || '',
+      qty:       addQty,
+      zona:      ubicacion.zona     || '',
+      gondola:   ubicacion.gondola  || '',
+      nivel:     ubicacion.nivel    || '',
+      operator:  operator.name,
+      datetime:  nowStr(),
+      isoDate:   nowISO(),
+      lastUpdate:    nowStr(),
+      lastIso:       nowISO(),
+      lastOperator:  operator.name
+    };
+    completarDesdeMaestro(nuevoItem);
+    inventory.push(nuevoItem);
+    addAudit('add', `${addQty} un. · 📍${[ubicacion.zona,ubicacion.gondola,ubicacion.nivel].filter(Boolean).join(' › ')||'sin ubicación'}`, nuevoItem.name);
+    registrarTiempoProducto();
+    sendToSheets(nuevoItem);
+    mostrarDiferencia(nuevoItem, addQty);
+    save();
+    showToast(`✅ ${nuevoItem.name}: ${addQty} en ${textoSector(nuevoItem)}`);
+    dismissFound();
+    clearForm();
+    return;
+  }
+
+  // Item ya existe en inventory → sumar cantidad
+  const prev = foundProductRef.qty;
   foundProductRef.qty          = redondear(foundProductRef.qty + addQty);
   foundProductRef.lastUpdate   = nowStr();
   foundProductRef.lastIso      = nowISO();
