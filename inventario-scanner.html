@@ -1325,7 +1325,7 @@ function renderList() {
           <span class="qty-val">${item.qty}</span>
           <button class="qty-btn" onclick="changeQty(${realIdx},1)">+</button>
         </div>
-        ${esDuenio() ? `<button class="del-btn" onclick="deleteItem(${realIdx})">🗑 Eliminar</button>` : ''}
+        ${puedeBorrar() ? `<button class="del-btn" onclick="deleteItem(${realIdx})">🗑 Eliminar</button>` : ''}
       </div>
     </div>`;
   }).join('');
