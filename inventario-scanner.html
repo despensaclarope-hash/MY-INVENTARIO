@@ -282,6 +282,44 @@
   .prog-item-falta { background: rgba(211,47,47,0.08); border: 1px solid rgba(211,47,47,0.2); color: var(--text); }
   .prog-item-name  { font-weight: 700; font-size: 11px; margin-bottom: 2px; }
   .prog-item-meta  { font-size: 10px; color: var(--muted); }
+
+  /* ── VENCIMIENTOS ── */
+  input[type="date"] { color-scheme: dark; min-height: 42px; }
+  .venc-badge { display: none; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--rojo); color: #fff; font-size: 10px; font-weight: 800; line-height: 16px; margin-left: 3px; vertical-align: middle; }
+  .venc-badge.show { display: inline-block; }
+  .venc-box { background: rgba(249,168,37,0.06); border: 1px solid rgba(249,168,37,0.35); border-radius: 12px; padding: 12px; margin-bottom: 14px; }
+  .venc-box-head { font-size: 12px; font-weight: 800; color: var(--amarillo); margin-bottom: 8px; display: flex; justify-content: space-between; gap: 8px; }
+  .venc-box-head span { font-weight: 600; color: var(--muted); }
+  .venc-row { display: grid; grid-template-columns: 1.3fr 1fr; gap: 8px; }
+  .venc-estado { display: none; margin-top: 10px; border-radius: 10px; padding: 10px 12px; font-size: 13px; font-weight: 700; line-height: 1.4; }
+  .venc-estado.show { display: block; }
+  .venc-estado small { display: block; font-size: 11px; font-weight: 600; opacity: 0.85; }
+  .venc-rojo     { background: rgba(211,47,47,0.15); border: 1px solid var(--rojo); color: #FF8A80; }
+  .venc-naranja  { background: rgba(255,111,0,0.14); border: 1px solid #FF6F00; color: #FFB74D; }
+  .venc-amarillo { background: rgba(249,168,37,0.12); border: 1px solid var(--amarillo); color: #FFD54F; }
+  .venc-verde    { background: rgba(0,200,83,0.10); border: 1px solid var(--verde); color: var(--verde); }
+  .venc-hint { font-size: 10px; color: var(--muted); margin-top: 8px; }
+  .venc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .venc-stat { border-radius: 12px; padding: 10px; cursor: pointer; text-align: left; font-family: var(--font); }
+  .venc-stat .n { font-size: 22px; font-weight: 800; line-height: 1; }
+  .venc-stat .l { font-size: 11px; font-weight: 700; margin-top: 3px; }
+  .venc-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+  .venc-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; cursor: pointer; }
+  .venc-name { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+  .venc-meta { font-size: 11px; color: var(--muted); line-height: 1.5; }
+  .venc-pill { white-space: nowrap; font-size: 11px; font-weight: 800; padding: 4px 9px; border-radius: 20px; }
+  .venc-pill.rojo     { background: var(--rojo); color: #fff; }
+  .venc-pill.naranja  { background: rgba(255,111,0,0.18); color: #FFB74D; border: 1px solid #FF6F00; }
+  .venc-pill.amarillo { background: rgba(249,168,37,0.15); color: #FFD54F; border: 1px solid var(--amarillo); }
+  .venc-pill.verde    { background: rgba(0,200,83,0.15); color: var(--verde); border: 1px solid var(--verde); }
+  .venc-acciones { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .venc-acciones.show { display: block; }
+  .venc-acc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .venc-acc-btn { background: var(--card2); border: 1px solid var(--border); color: var(--text); padding: 10px 8px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: var(--font); }
+  .venc-acc-btn:hover { border-color: var(--verde); color: var(--verde); }
+  .venc-regla { display: grid; grid-template-columns: 1fr 70px 36px; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .venc-regla input { padding: 8px 10px; font-size: 13px; }
+  .venc-del { background: transparent; border: 1px solid rgba(211,47,47,0.4); color: var(--rojo); border-radius: 8px; height: 36px; cursor: pointer; font-weight: 800; }
 </style>
 </head>
 <body>
@@ -362,6 +400,7 @@
     <button class="tab" onclick="switchTab('list',this)">📋 Inventario</button>
     <button class="tab" onclick="switchTab('audit',this)">📝 Auditoría</button>
     <button class="tab" onclick="switchTab('export',this)">💾 Exportar</button>
+    <button class="tab" onclick="switchTab('venc',this)">⏰ Vencim.<span class="venc-badge" id="venc-badge"></span></button>
   </div>
 
   <!-- ══════ PROGRESO ══════ -->
@@ -571,6 +610,23 @@
         <label>➕ Agregar cantidad:</label>
         <input id="found-add-qty" type="number" value="1" min="0" max="99999" step="any" inputmode="decimal">
       </div>
+      <!-- ⏰ Control de vencimiento (solo productos con alerta configurada) -->
+      <div id="found-venc" class="venc-box" style="display:none">
+        <div class="venc-box-head">⏰ Fecha de vencimiento <span id="found-venc-regla"></span></div>
+        <div class="venc-row">
+          <div>
+            <label>Vence (lote más próximo)</label>
+            <input id="found-venc-fecha" type="date" oninput="actualizarEstadoVenc('found')">
+          </div>
+          <div id="found-venc-qty-wrap" style="display:none">
+            <label>Cant. de ese lote</label>
+            <input id="found-venc-qty" type="number" min="0" step="any" inputmode="decimal">
+          </div>
+        </div>
+        <div id="found-venc-estado" class="venc-estado"></div>
+        <button id="found-venc-otro" type="button" class="btn btn-secondary" onclick="guardarOtroLote()" style="display:none;margin-top:8px;width:100%;font-size:12px;padding:10px;">➕ Guardar este lote y cargar otra fecha</button>
+        <div class="venc-hint">Si la fecha está lejos solo se avisa OK y no se guarda. Sin fecha visible, dejalo vacío.</div>
+      </div>
       <div class="found-actions">
         <button class="btn btn-primary" onclick="confirmFoundProduct()" style="flex:2">
           <span>✅</span> Confirmar y agregar
@@ -657,6 +713,22 @@
         <div>
           <label>Stock mínimo</label>
           <input id="inp-min" type="number" placeholder="5" min="0">
+        </div>
+        <div class="input-full" id="inp-venc-wrap" style="display:none">
+          <div class="venc-box" style="margin-bottom:0">
+            <div class="venc-box-head">⏰ Fecha de vencimiento <span id="inp-venc-regla"></span></div>
+            <div class="venc-row">
+              <div>
+                <label>Vence (lote más próximo)</label>
+                <input id="inp-venc-fecha" type="date" oninput="actualizarEstadoVenc('inp')">
+              </div>
+              <div id="inp-venc-qty-wrap" style="display:none">
+                <label>Cant. de ese lote</label>
+                <input id="inp-venc-qty" type="number" min="0" step="any" inputmode="decimal">
+              </div>
+            </div>
+            <div id="inp-venc-estado" class="venc-estado"></div>
+          </div>
         </div>
         <div>
           <label>👤 Cargado por</label>
@@ -909,6 +981,84 @@
     </div>
   </div>
 
+  <!-- ══════ VENCIMIENTOS ══════ -->
+  <div id="tab-venc" class="section">
+
+    <div class="table-header">
+      <h2>⏰ Vencimientos</h2>
+      <div style="font-size:11px;color:var(--muted)" id="venc-hoy"></div>
+    </div>
+
+    <div class="venc-stats">
+      <button class="venc-stat venc-rojo" onclick="filtrarVenc('vencidos')"><div class="n" id="venc-n-vencidos">0</div><div class="l">Vencidos</div></button>
+      <button class="venc-stat venc-naranja" onclick="filtrarVenc('urgentes')"><div class="n" id="venc-n-urgentes">0</div><div class="l">0 a 3 días</div></button>
+      <button class="venc-stat venc-amarillo" onclick="filtrarVenc('proximos')"><div class="n" id="venc-n-proximos">0</div><div class="l">Próximos</div></button>
+    </div>
+
+    <div class="chips" id="venc-chips">
+      <button class="chip active" data-f="pendientes" onclick="filtrarVenc('pendientes')">Pendientes</button>
+      <button class="chip" data-f="vencidos" onclick="filtrarVenc('vencidos')">Vencidos</button>
+      <button class="chip" data-f="urgentes" onclick="filtrarVenc('urgentes')">0 a 3 días</button>
+      <button class="chip" data-f="proximos" onclick="filtrarVenc('proximos')">Próximos</button>
+      <button class="chip" data-f="resueltos" onclick="filtrarVenc('resueltos')">Resueltos</button>
+      <button class="chip" data-f="todos" onclick="filtrarVenc('todos')">Todos</button>
+    </div>
+
+    <div class="search-box" style="max-width:none;margin-bottom:12px;">
+      <span>🔍</span>
+      <input id="venc-buscar" type="text" placeholder="Buscar producto o código..." oninput="renderVencimientos()">
+    </div>
+
+    <div class="items-list" id="venc-lista"></div>
+
+    <!-- Registrar sin contar (control rápido de góndolas) -->
+    <div class="input-card" style="margin-top:16px;">
+      <h3>📌 Control rápido de góndolas</h3>
+      <div style="font-size:11px;color:var(--muted);margin:-8px 0 12px;">Registrá una fecha sin sumar al conteo del inventario.</div>
+      <div id="venc-scanner-viewport" style="display:none;background:#000;border-radius:10px;overflow:hidden;margin-bottom:10px;"><div id="venc-scanner-reader"></div></div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <input id="venc-q-codigo" type="text" placeholder="Código de barras" inputmode="numeric" autocomplete="off" style="flex:1" onchange="buscarProductoVencRapido()" onkeydown="if(event.key==='Enter'){event.preventDefault();buscarProductoVencRapido();}">
+        <button class="btn btn-secondary" id="venc-btn-cam" onclick="toggleScannerVenc()" style="flex:0 0 auto;padding:10px 14px;">📷</button>
+      </div>
+      <div id="venc-q-prod" style="font-size:13px;font-weight:700;color:var(--verde);margin-bottom:8px;min-height:18px;"></div>
+      <div id="venc-q-nombre-wrap" style="display:none;margin-bottom:8px;">
+        <label>Nombre del producto</label>
+        <input id="venc-q-nombre" type="text" placeholder="No está en el maestro: escribí el nombre">
+      </div>
+      <div class="venc-row">
+        <div><label>Vence</label><input id="venc-q-fecha" type="date" oninput="actualizarEstadoVenc('venc-q')"></div>
+        <div id="venc-q-qty-wrap"><label>Cantidad del lote</label><input id="venc-q-qty" type="number" min="0" step="any" inputmode="decimal" value="1"></div>
+      </div>
+      <div id="venc-q-estado" class="venc-estado"></div>
+      <button class="btn btn-primary" onclick="guardarVencRapido()" style="width:100%;margin-top:10px;">💾 Guardar fecha</button>
+    </div>
+
+    <!-- Configuración (Gerente / Dueño / Supervisor / Encargado) -->
+    <div class="input-card" id="venc-config" style="display:none">
+      <h3>⚙️ Días de alerta</h3>
+      <div style="font-size:11px;color:var(--muted);margin:-8px 0 12px;line-height:1.5;">Si faltan estos días o menos para vencer, la app avisa y guarda el lote. La categoría se compara por el comienzo del rubro: <b style="color:var(--text)">PERECIBLES - LACTEOS</b> incluye todos los lácteos. Gana la regla más específica.</div>
+      <div style="font-size:11px;font-weight:800;color:var(--amarillo);margin-bottom:6px;">POR CATEGORÍA / RUBRO</div>
+      <div id="venc-reglas-cat"></div>
+      <button class="btn btn-secondary" onclick="agregarReglaVenc('cats')" style="width:100%;font-size:12px;padding:9px;margin-bottom:14px;">➕ Agregar categoría</button>
+      <div style="font-size:11px;font-weight:800;color:var(--amarillo);margin-bottom:6px;">EXCEPCIONES POR PRODUCTO (código de barras)</div>
+      <div id="venc-reglas-prod"></div>
+      <button class="btn btn-secondary" onclick="agregarReglaVenc('prods')" style="width:100%;font-size:12px;padding:9px;margin-bottom:14px;">➕ Agregar producto</button>
+      <datalist id="venc-cat-datalist"></datalist>
+      <button class="btn btn-primary" onclick="guardarReglasVenc()" style="width:100%;">💾 Guardar configuración</button>
+    </div>
+
+    <div class="export-grid" style="margin-top:4px;">
+      <div class="export-card" onclick="exportarVencimientos()">
+        <div class="export-icon">📊</div>
+        <div class="export-info"><h3>Exportar vencimientos a Excel</h3><p>Todos los lotes con días restantes y lo que se hizo con cada uno</p></div>
+      </div>
+      <div class="export-card" id="venc-card-limpiar" onclick="limpiarVencResueltos()" style="display:none">
+        <div class="export-icon">🧹</div>
+        <div class="export-info"><h3 style="color:var(--rojo)">Borrar lotes resueltos</h3><p>Quita los ya rebajados, devueltos o retirados (exportá antes)</p></div>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /app -->
 
 <div class="toast" id="toast"></div>
@@ -921,6 +1071,23 @@ let operator   = JSON.parse(localStorage.getItem('mm_op')    || 'null');
 let ubicacion  = JSON.parse(localStorage.getItem('mm_ubicacion') || '{"zona":"","gondola":"","nivel":""}');
 let scanning   = false;
 let currentFilter = '';
+// ⏰ Vencimientos: datos propios, separados del conteo (no se borran con "Borrar inventario")
+let vencimientos = JSON.parse(localStorage.getItem('mm_venc') || '[]');
+let vencReglas   = JSON.parse(localStorage.getItem('mm_venc_reglas') || 'null') || {
+  cats:  [{ pref: 'PERECIBLES - LACTEOS', dias: 15 }, { pref: 'PERECIBLES', dias: 7 }],
+  prods: []
+};
+let vencFiltro = 'pendientes';
+let vencAbierto = null;
+let vencScanner = null, vencScanning = false;
+const VENC_ESTADOS = {
+  'Rebajado':  '🏷️ Rebajado de precio',
+  'Al frente': '⬆️ Pasado al frente',
+  'Devuelto':  '↩️ Devuelto a proveedor',
+  'Merma':     '🗑️ Retirado (merma)'
+};
+const vencCtx = {};   // contexto de cada panel: 'found' (producto escaneado), 'inp' (producto nuevo), 'venc-q' (control rápido)
+
 
 // ══ ZONAS — definición global ══
 const ZONAS = {
@@ -1039,7 +1206,7 @@ function actualizarAvisoRespaldo() {
   }
 }
 function descargarRespaldo() {
-  const data = { app: 'inventario-clarope', version: 2, fecha: new Date().toISOString(), inventory, auditLog, ubicacion };
+  const data = { app: 'inventario-clarope', version: 2, fecha: new Date().toISOString(), inventory, auditLog, ubicacion, vencimientos, vencReglas };
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -1060,6 +1227,8 @@ function restaurarRespaldo(input) {
       localStorage.setItem('mm_inv_prev', JSON.stringify(inventory));
       inventory = data.inventory;
       if (Array.isArray(data.auditLog)) auditLog = data.auditLog;
+      if (Array.isArray(data.vencimientos)) { vencimientos = data.vencimientos; localStorage.setItem('mm_venc', JSON.stringify(vencimientos)); }
+      if (data.vencReglas && Array.isArray(data.vencReglas.cats)) { vencReglas = data.vencReglas; localStorage.setItem('mm_venc_reglas', JSON.stringify(vencReglas)); }
       addAudit('system', `Respaldo restaurado (${inventory.length} registros)`, null);
       save();
       showToast('✅ Respaldo restaurado');
@@ -1178,6 +1347,7 @@ function refreshAll() {
   updateProgresoSelector();
   renderProgreso();
   actualizarAvisoRespaldo();
+  renderVencimientos();
 }
 
 // ══ AUDIT LOG ══
@@ -1344,6 +1514,7 @@ function addProduct() {
 
   if (!name) { showToast('⚠️ Ingresá el nombre del producto', 'warn'); document.getElementById('inp-name').focus(); return; }
   if (!hayUbicacion()) { avisarSinUbicacion(); return; }
+  procesarVencPanel('inp', { barcode, barcode2, name, cat, price }, qty);
 
   // Mismo producto (por cualquiera de los dos códigos) ya contado EN ESTE SECTOR → sumar ahí
   const nuevo = completarDesdeMaestro({ barcode, barcode2, name });
@@ -1457,6 +1628,8 @@ function clearForm() {
   document.getElementById('found-panel').classList.remove('visible');
   document.querySelector('.input-card').style.display = 'block';
   document.getElementById('found-add-cod2-row').style.display = 'none';
+  limpiarVencPanel('found'); limpiarVencPanel('inp');
+  document.getElementById('inp-venc-wrap').style.display = 'none';
   foundProductRef = null;
   document.getElementById('inp-barcode').focus();
 }
@@ -2445,7 +2618,9 @@ function switchTab(name, el) {
   document.getElementById('tab-'+name).classList.add('active');
   if (el) el.classList.add('active');
   if (scanning && name!=='scan') stopScanner();
+  if (name !== 'venc') detenerScannerVenc();
   if (name === 'progreso') { updateProgresoSelector(); renderProgreso(); }
+  if (name === 'venc') { renderVencimientos(); renderReglasVenc(); }
 }
 
 // ══ INIT ══
@@ -2883,6 +3058,7 @@ function showFoundPanel(item) {
   const qtyEl = document.getElementById('found-add-qty');
   qtyEl.value = '1';
   setTimeout(() => { qtyEl.focus(); qtyEl.select(); }, 80);
+  prepararVencPanel('found', item);
 
   if (navigator.vibrate) navigator.vibrate([60, 40, 60]);
 }
@@ -2901,6 +3077,7 @@ function dismissFound(forceNew) {
 function confirmFoundProduct() {
   if (!foundProductRef) return;
   const addQty = leerCantidad('found-add-qty', 1);
+  procesarVencPanel('found', foundProductRef, addQty);
 
   // Si el item viene del maestro (aún no fue escaneado), crear nuevo registro en inventory
   if (foundProductRef._desdeMaestro) {
@@ -2959,6 +3136,500 @@ document.getElementById('found-add-qty').addEventListener('keydown', function(e)
 });
 
 document.getElementById('inp-name').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('inp-qty').focus(); });
+
+// ═══════════════════════════════════════════════════════════════════
+//  ⏰ MÓDULO VENCIMIENTOS
+//  Datos en localStorage: mm_venc (lotes) y mm_venc_reglas (días de alerta).
+//  No modifica el conteo: solo agrega registros de lotes próximos a vencer.
+// ═══════════════════════════════════════════════════════════════════
+
+function guardarVenc() { localStorage.setItem('mm_venc', JSON.stringify(vencimientos)); }
+function normCat(c) { return String(c || '').toUpperCase().replace(/\s+/g, ' ').trim(); }
+function catDe(item) {
+  if (!item) return '';
+  if (item.cat) return item.cat;
+  const m = maestroDe(item);
+  return m ? (m.cat || m.rubro || '') : '';
+}
+// Días de alerta: primero excepción por producto, después la categoría más específica
+function reglaVencDe(item) {
+  const cods = codigosDe(item);
+  const p = (vencReglas.prods || []).find(r => normCod(r.codigo) && cods.includes(normCod(r.codigo)));
+  if (p) return { dias: parseInt(p.dias) || 0, origen: 'producto' };
+  const cat = normCat(catDe(item));
+  if (!cat) return { dias: 0, origen: '' };
+  let mejor = null;
+  (vencReglas.cats || []).forEach(r => {
+    const pr = normCat(r.pref);
+    if (pr && cat.startsWith(pr) && (!mejor || pr.length > normCat(mejor.pref).length)) mejor = r;
+  });
+  return mejor ? { dias: parseInt(mejor.dias) || 0, origen: mejor.pref } : { dias: 0, origen: '' };
+}
+function hoyLocal() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
+function parseFechaISO(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return isNaN(d) ? null : d;
+}
+function diasHasta(fecha) { const d = parseFechaISO(fecha); return d ? Math.round((d - hoyLocal()) / 86400000) : null; }
+function fechaCorta(f) {
+  const d = parseFechaISO(f);
+  return d ? `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` : '';
+}
+function fechaValida(f) { const d = parseFechaISO(f); return !!d && d.getFullYear() >= 2000 && d.getFullYear() <= 2100; }
+function nivelVenc(dias, limite) {
+  if (dias === null) return null;
+  if (dias < 0) return 'rojo';
+  if (dias <= 3) return 'naranja';
+  if (dias <= limite) return 'amarillo';
+  return 'verde';
+}
+function textoDias(d) {
+  if (d < 0) return `Vencido hace ${-d} día${-d === 1 ? '' : 's'}`;
+  if (d === 0) return 'Vence HOY';
+  if (d === 1) return 'Vence mañana';
+  return `Vence en ${d} días`;
+}
+function vid(pref, part) { return pref === 'venc-q' ? `venc-q-${part}` : `${pref}-venc-${part}`; }
+function puedeGestionarVenc() { return veDiferencia(); }
+
+// ── Paneles de fecha (escaneo, producto nuevo, control rápido) ──
+function limpiarVencPanel(pref) {
+  const f = document.getElementById(vid(pref, 'fecha'));      if (f) f.value = '';
+  const e = document.getElementById(vid(pref, 'estado'));     if (e) { e.className = 'venc-estado'; e.innerHTML = ''; }
+  const q = document.getElementById(vid(pref, 'qty'));        if (q && pref !== 'venc-q') q.value = '';
+  const w = document.getElementById(vid(pref, 'qty-wrap'));   if (w && pref !== 'venc-q') w.style.display = 'none';
+  const o = document.getElementById('found-venc-otro');       if (o && pref === 'found') o.style.display = 'none';
+}
+function prepararVencPanel(pref, item) {
+  const regla = reglaVencDe(item);
+  vencCtx[pref] = { item, regla };
+  limpiarVencPanel(pref);
+  const box = document.getElementById(pref === 'inp' ? 'inp-venc-wrap' : 'found-venc');
+  if (box) box.style.display = regla.dias > 0 ? 'block' : 'none';
+  const r = document.getElementById(vid(pref, 'regla'));
+  if (r) r.textContent = regla.dias > 0 ? `alerta: ${regla.dias} días` : '';
+}
+function actualizarEstadoVenc(pref) {
+  const ctx = vencCtx[pref] || { regla: { dias: 0 } };
+  const lim = ctx.regla.dias || 0;
+  const fecha = document.getElementById(vid(pref, 'fecha')).value;
+  const est = document.getElementById(vid(pref, 'estado'));
+  const wrap = document.getElementById(vid(pref, 'qty-wrap'));
+  const otro = document.getElementById('found-venc-otro');
+  const dias = fechaValida(fecha) ? diasHasta(fecha) : null;
+  if (dias === null) {
+    est.className = 'venc-estado'; est.innerHTML = '';
+    if (wrap && pref !== 'venc-q') wrap.style.display = 'none';
+    if (otro && pref === 'found') otro.style.display = 'none';
+    return;
+  }
+  const rapido = pref === 'venc-q';
+  const nivel = nivelVenc(dias, rapido ? Math.max(lim, 3) : lim);
+  const guarda = nivel !== 'verde';
+  let titulo, detalle;
+  if (nivel === 'rojo')      { titulo = `🚫 ${textoDias(dias).toUpperCase()}`; detalle = 'Retirar de góndola. Se guarda para seguimiento.'; }
+  else if (nivel === 'verde') { titulo = `✅ Fecha OK · faltan ${dias} días`; detalle = rapido ? (lim ? `Está lejos del límite (${lim} días), igual se guarda si tocás Guardar.` : 'Este producto no tiene alerta configurada; se guarda igual si tocás Guardar.') : `No se guarda (límite: ${lim} días).`; }
+  else                        { titulo = `⏰ ${textoDias(dias)}`; detalle = lim ? `Dentro del límite de ${lim} días: se guarda para seguimiento.` : 'Se guarda para seguimiento.'; }
+  est.className = `venc-estado show venc-${nivel}`;
+  est.innerHTML = `${escHtml(titulo)}<small>${escHtml(detalle)}</small>`;
+  if (wrap && !rapido) {
+    wrap.style.display = guarda ? 'block' : 'none';
+    const q = document.getElementById(vid(pref, 'qty'));
+    if (guarda && q && !q.value) {
+      const base = document.getElementById(pref === 'found' ? 'found-add-qty' : 'inp-qty');
+      q.value = (base && base.value) || '1';
+    }
+  }
+  if (otro && pref === 'found') otro.style.display = guarda ? 'block' : 'none';
+  if (guarda && navigator.vibrate) navigator.vibrate(nivel === 'rojo' ? [200, 80, 200] : [120]);
+}
+// Se llama al confirmar el conteo: guarda el lote si está dentro del límite
+function procesarVencPanel(pref, item, cantidadContada) {
+  const fEl = document.getElementById(vid(pref, 'fecha'));
+  if (!fEl || !item) return null;
+  const fecha = fEl.value;
+  if (!fecha) return null;
+  if (!fechaValida(fecha)) { showToast('⚠️ Fecha de vencimiento inválida — no se guardó', 'warn'); return null; }
+  const regla = reglaVencDe(item);
+  if (regla.dias <= 0) return null;
+  const dias = diasHasta(fecha);
+  if (dias > regla.dias) return null;
+  const qEl = document.getElementById(vid(pref, 'qty'));
+  const qv = qEl ? parseFloat(String(qEl.value).replace(',', '.')) : NaN;
+  const qty = isNaN(qv) ? (cantidadContada || 1) : redondear(qv);
+  return registrarLote(item, fecha, qty, 'escaneo');
+}
+function guardarOtroLote() {
+  const ctx = vencCtx.found;
+  if (!ctx) return;
+  const fecha = document.getElementById('found-venc-fecha').value;
+  if (!fechaValida(fecha)) { showToast('⚠️ Elegí la fecha del lote', 'warn'); return; }
+  if (diasHasta(fecha) > ctx.regla.dias) { showToast('Esa fecha está lejos del límite: no hace falta guardarla'); return; }
+  const qv = parseFloat(String(document.getElementById('found-venc-qty').value).replace(',', '.'));
+  const l = registrarLote(ctx.item, fecha, isNaN(qv) ? 1 : redondear(qv), 'escaneo');
+  limpiarVencPanel('found');
+  showToast(`⏰ Lote ${fechaCorta(l.fecha)} guardado (${l.qty} u.) — cargá la otra fecha`, 'warn');
+  document.getElementById('found-venc-fecha').focus();
+}
+function registrarLote(item, fecha, qty, origen) {
+  const m = maestroDe(item);
+  const cods = [...new Set([...codigosDe(item), ...codigosDe(m)])];
+  const nombre = item.name || (m && m.name) || cods[0] || 'Sin nombre';
+  const ref = { barcode: cods[0] || '', barcode2: cods[1] || '', name: nombre };
+  const existente = vencimientos.find(v => v.estado === 'Pendiente' && v.fecha === fecha &&
+    (v.gondola || '') === (ubicacion.gondola || '') && mismoProducto(v, ref));
+  let lote;
+  if (existente) {
+    existente.qty = redondear((existente.qty || 0) + qty);
+    existente.ultimaVez = nowStr();
+    existente.ultimoOperador = operator ? operator.name : '';
+    lote = existente;
+  } else {
+    lote = {
+      id: 'v' + Date.now() + Math.floor(Math.random() * 1000),
+      barcode: ref.barcode, barcode2: ref.barcode2, name: nombre,
+      cat: catDe(item) || (m && (m.cat || m.rubro)) || '',
+      fecha, qty,
+      zona: ubicacion.zona || '', gondola: ubicacion.gondola || '', nivel: ubicacion.nivel || '',
+      operator: operator ? operator.name : '', registrado: nowStr(), iso: nowISO(),
+      estado: 'Pendiente', origen: origen || ''
+    };
+    vencimientos.push(lote);
+  }
+  guardarVenc();
+  addAudit('add', `⏰ Vencimiento ${fechaCorta(fecha)} · ${qty} u.${existente ? ' (sumado al lote)' : ''}`, nombre);
+  sendVencToSheets(lote, existente ? 'suma' : 'nuevo');
+  renderVencimientos();
+  return lote;
+}
+// Formulario de producto nuevo: mostrar la fecha cuando la categoría tiene alerta
+function actualizarVencForm() {
+  const g = id => (document.getElementById(id).value || '').trim();
+  const prev = document.getElementById('inp-venc-fecha').value;
+  const prevQ = document.getElementById('inp-venc-qty').value;
+  prepararVencPanel('inp', { barcode: g('inp-barcode'), barcode2: g('inp-barcode2'), name: g('inp-name'), cat: g('inp-cat') });
+  if (prev) {
+    document.getElementById('inp-venc-fecha').value = prev;
+    document.getElementById('inp-venc-qty').value = prevQ;
+    actualizarEstadoVenc('inp');
+  }
+}
+['inp-cat', 'inp-barcode', 'inp-barcode2'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('input', actualizarVencForm);
+  el.addEventListener('change', actualizarVencForm);
+});
+
+// ── Control rápido (sin contar) ──
+function buscarProductoVencRapido() {
+  const code = normCod(document.getElementById('venc-q-codigo').value);
+  const prodEl = document.getElementById('venc-q-prod');
+  const nomWrap = document.getElementById('venc-q-nombre-wrap');
+  if (!code) { prodEl.textContent = ''; nomWrap.style.display = 'none'; vencCtx['venc-q'] = null; return; }
+  const m = buscarMaestro(code) || inventory.find(i => codigosDe(i).includes(code));
+  const item = m ? { barcode: code, barcode2: codigosDe(m).find(c => c !== code) || '', name: m.name, cat: m.cat || m.rubro || '' } : { barcode: code };
+  const regla = reglaVencDe(item);
+  vencCtx['venc-q'] = { item, regla, code };
+  if (m) {
+    prodEl.style.color = 'var(--verde)';
+    prodEl.textContent = `📦 ${m.name}` + (regla.dias > 0 ? ` · alerta ${regla.dias} días` : ' · sin alerta configurada');
+    nomWrap.style.display = 'none';
+  } else {
+    prodEl.style.color = 'var(--amarillo)';
+    prodEl.textContent = '⚠️ Código no encontrado en el maestro';
+    nomWrap.style.display = 'block';
+  }
+  actualizarEstadoVenc('venc-q');
+  document.getElementById(m ? 'venc-q-fecha' : 'venc-q-nombre').focus();
+}
+function guardarVencRapido() {
+  const code = normCod(document.getElementById('venc-q-codigo').value);
+  if (!code) { showToast('⚠️ Escaneá o escribí el código', 'warn'); return; }
+  if (!vencCtx['venc-q'] || vencCtx['venc-q'].code !== code) buscarProductoVencRapido();
+  const ctx = vencCtx['venc-q'];
+  const item = Object.assign({}, ctx.item);
+  if (!item.name) item.name = document.getElementById('venc-q-nombre').value.trim();
+  if (!item.name) { showToast('⚠️ Escribí el nombre del producto', 'warn'); document.getElementById('venc-q-nombre').focus(); return; }
+  const fecha = document.getElementById('venc-q-fecha').value;
+  if (!fechaValida(fecha)) { showToast('⚠️ Elegí la fecha de vencimiento', 'warn'); return; }
+  const qv = parseFloat(String(document.getElementById('venc-q-qty').value).replace(',', '.'));
+  const l = registrarLote(item, fecha, isNaN(qv) ? 1 : redondear(qv), 'control');
+  showToast(`⏰ ${l.name}: ${fechaCorta(l.fecha)} guardado (${l.qty} u.)`);
+  ['venc-q-codigo', 'venc-q-fecha', 'venc-q-nombre'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('venc-q-qty').value = '1';
+  document.getElementById('venc-q-prod').textContent = '';
+  document.getElementById('venc-q-nombre-wrap').style.display = 'none';
+  limpiarVencPanel('venc-q');
+  vencCtx['venc-q'] = null;
+  document.getElementById('venc-q-codigo').focus();
+}
+
+// ── Cámara propia del control rápido ──
+function toggleScannerVenc() { vencScanning ? detenerScannerVenc() : iniciarScannerVenc(); }
+function iniciarScannerVenc() {
+  if (scanning) stopScanner();
+  const vp = document.getElementById('venc-scanner-viewport');
+  vp.style.display = 'block';
+  document.getElementById('venc-scanner-reader').innerHTML = '';
+  vencScanner = new Html5Qrcode('venc-scanner-reader', { verbose: false });
+  vencScanner.start(
+    { facingMode: 'environment' },
+    { fps: 15, qrbox: { width: 260, height: 110 }, aspectRatio: 1.7,
+      formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.ITF] },
+    (txt) => {
+      detenerScannerVenc();
+      document.getElementById('venc-q-codigo').value = txt.trim();
+      if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+      buscarProductoVencRapido();
+    },
+    () => {}
+  ).then(() => {
+    vencScanning = true;
+    document.getElementById('venc-btn-cam').textContent = '⏹️';
+  }).catch(() => {
+    vp.style.display = 'none';
+    vencScanning = false; vencScanner = null;
+    showToast('❌ No se pudo acceder a la cámara', 'error');
+  });
+}
+function detenerScannerVenc() {
+  if (!vencScanner && !vencScanning) return;
+  vencScanning = false;
+  const s = vencScanner; vencScanner = null;
+  if (s) s.stop().catch(() => {}).finally(() => { try { s.clear(); } catch (e) {} });
+  const vp = document.getElementById('venc-scanner-viewport'); if (vp) vp.style.display = 'none';
+  const b = document.getElementById('venc-btn-cam'); if (b) b.textContent = '📷';
+}
+
+// ── Pestaña Vencimientos ──
+function grupoVenc(v, dias) {
+  if (v.estado !== 'Pendiente') return 'resueltos';
+  if (dias === null) return 'proximos';
+  if (dias < 0) return 'vencidos';
+  if (dias <= 3) return 'urgentes';
+  return 'proximos';
+}
+function filtrarVenc(f) {
+  vencFiltro = f;
+  document.querySelectorAll('#venc-chips .chip').forEach(c => c.classList.toggle('active', c.dataset.f === f));
+  renderVencimientos();
+}
+function toggleAccionesVenc(id) { vencAbierto = vencAbierto === id ? null : id; renderVencimientos(); }
+function renderVencimientos() {
+  const lista = document.getElementById('venc-lista');
+  if (!lista) return;
+  const all = vencimientos.map(v => { const d = diasHasta(v.fecha); return { v, dias: d, g: grupoVenc(v, d) }; });
+  const cuenta = g => all.filter(x => x.g === g).length;
+  document.getElementById('venc-n-vencidos').textContent = cuenta('vencidos');
+  document.getElementById('venc-n-urgentes').textContent = cuenta('urgentes');
+  document.getElementById('venc-n-proximos').textContent = cuenta('proximos');
+  const urgentes = cuenta('vencidos') + cuenta('urgentes');
+  const badge = document.getElementById('venc-badge');
+  badge.textContent = urgentes; badge.classList.toggle('show', urgentes > 0);
+  document.getElementById('venc-hoy').textContent = 'Hoy ' + fechaCorta(hoyISO());
+  document.getElementById('venc-config').style.display = puedeGestionarVenc() ? 'block' : 'none';
+  document.getElementById('venc-card-limpiar').style.display = puedeBorrar() ? '' : 'none';
+
+  const q = (document.getElementById('venc-buscar').value || '').trim().toLowerCase();
+  let rows = all.filter(x => vencFiltro === 'todos' || (vencFiltro === 'pendientes' ? x.g !== 'resueltos' : x.g === vencFiltro));
+  if (q) rows = rows.filter(x => [x.v.name, x.v.barcode, x.v.barcode2, x.v.cat].some(s => String(s || '').toLowerCase().includes(q)));
+  rows.sort((a, b) => {
+    const ra = a.g === 'resueltos', rb = b.g === 'resueltos';
+    if (ra !== rb) return ra ? 1 : -1;
+    if (ra) return String(b.v.accionIso || '').localeCompare(String(a.v.accionIso || ''));
+    return (a.dias ?? 9999) - (b.dias ?? 9999);
+  });
+  if (!rows.length) {
+    lista.innerHTML = `<div class="empty"><div class="empty-icon">⏰</div><h3>${vencimientos.length ? 'Nada en este filtro' : 'Sin lotes cargados'}</h3><p>Al escanear un producto con alerta, cargá la fecha y aparece acá</p></div>`;
+    return;
+  }
+  const gestiona = puedeGestionarVenc(), borra = puedeBorrar();
+  lista.innerHTML = rows.map(({ v, dias, g }) => {
+    const reglaLim = reglaVencDe(v).dias || 0;
+    const nivel = g === 'resueltos' ? 'verde' : nivelVenc(dias, Math.max(reglaLim, 3));
+    const pill = g === 'resueltos' ? escHtml(v.estado) : (dias === null ? '—' : dias < 0 ? 'Vencido' : dias === 0 ? 'Hoy' : `${dias} día${dias === 1 ? '' : 's'}`);
+    const abierto = vencAbierto === v.id;
+    const id = escHtml(v.id);
+    let acciones = '';
+    if (gestiona && g !== 'resueltos') {
+      acciones = `<div class="venc-acc-grid">${Object.keys(VENC_ESTADOS).map(k =>
+        `<button class="venc-acc-btn" onclick="accionVenc('${id}','${k}')">${VENC_ESTADOS[k]}</button>`).join('')}</div>`;
+    } else if (gestiona) {
+      acciones = `<button class="venc-acc-btn" style="width:100%" onclick="reabrirVenc('${id}')">↺ Volver a pendiente</button>`;
+    } else {
+      acciones = `<div style="font-size:11px;color:var(--muted)">Avisá al encargado o gerente para que decida qué hacer con este lote.</div>`;
+    }
+    const extras = [
+      gestiona ? `<button class="venc-acc-btn" onclick="corregirQtyVenc('${id}')">✏️ Corregir cantidad</button>` : '',
+      borra ? `<button class="venc-acc-btn" style="color:var(--rojo)" onclick="eliminarVenc('${id}')">❌ Eliminar registro</button>` : ''
+    ].filter(Boolean).join('');
+    return `<div class="venc-card">
+      <div class="venc-card-top" onclick="toggleAccionesVenc('${id}')">
+        <div style="min-width:0">
+          <div class="venc-name">${escHtml(v.name)}</div>
+          <div class="venc-meta">
+            ${v.cat ? escHtml(v.cat) + ' · ' : ''}<b style="color:var(--text)">${v.qty} u.</b> · vence <b style="color:var(--text)">${fechaCorta(v.fecha)}</b><br>
+            📍 ${escHtml(v.gondola || v.zona || 'sin sector')} · 👤 ${escHtml(v.ultimoOperador || v.operator || '')} · ${escHtml(v.ultimaVez || v.registrado || '')}
+            ${v.barcode ? `<br><span style="font-family:monospace">${escHtml(v.barcode)}</span>` : ''}
+            ${g === 'resueltos' ? `<br>✔ ${escHtml(VENC_ESTADOS[v.estado] || v.estado)} — ${escHtml(v.accionPor || '')} ${escHtml(v.accionFecha || '')}${v.nota ? ' · ' + escHtml(v.nota) : ''}` : ''}
+          </div>
+        </div>
+        <span class="venc-pill ${nivel}">${pill}</span>
+      </div>
+      <div class="venc-acciones ${abierto ? 'show' : ''}">
+        ${acciones}
+        ${extras ? `<div class="venc-acc-grid" style="margin-top:6px">${extras}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+function loteVenc(id) { return vencimientos.find(v => v.id === id); }
+function accionVenc(id, estado) {
+  const l = loteVenc(id); if (!l) return;
+  const nota = prompt(`${VENC_ESTADOS[estado]}\n${l.name} · ${l.qty} u. · vence ${fechaCorta(l.fecha)}\n\nNota (opcional, ej: 30% de rebaja):`, '');
+  if (nota === null) return;
+  l.estado = estado; l.nota = nota.trim();
+  l.accionPor = operator ? operator.name : ''; l.accionFecha = nowStr(); l.accionIso = nowISO();
+  guardarVenc();
+  addAudit('update', `⏰ ${VENC_ESTADOS[estado]} · lote ${fechaCorta(l.fecha)} (${l.qty} u.)${l.nota ? ' · ' + l.nota : ''}`, l.name);
+  sendVencToSheets(l, 'accion');
+  vencAbierto = null;
+  renderVencimientos(); renderAudit();
+  showToast(`✅ ${l.name}: ${VENC_ESTADOS[estado]}`);
+}
+function reabrirVenc(id) {
+  const l = loteVenc(id); if (!l) return;
+  l.estado = 'Pendiente'; l.accionPor = ''; l.accionFecha = ''; l.accionIso = ''; l.nota = '';
+  guardarVenc();
+  addAudit('update', `⏰ Lote ${fechaCorta(l.fecha)} vuelto a pendiente`, l.name);
+  sendVencToSheets(l, 'accion');
+  renderVencimientos(); renderAudit();
+}
+function corregirQtyVenc(id) {
+  const l = loteVenc(id); if (!l) return;
+  const r = prompt(`Cantidad del lote ${fechaCorta(l.fecha)} de ${l.name}:`, l.qty);
+  if (r === null) return;
+  const n = parseFloat(String(r).replace(',', '.'));
+  if (isNaN(n) || n < 0) { showToast('Cantidad inválida', 'warn'); return; }
+  addAudit('update', `⏰ Cantidad lote ${fechaCorta(l.fecha)}: ${l.qty} → ${redondear(n)}`, l.name);
+  l.qty = redondear(n);
+  guardarVenc(); sendVencToSheets(l, 'accion');
+  renderVencimientos(); renderAudit();
+}
+function eliminarVenc(id) {
+  const l = loteVenc(id); if (!l) return;
+  if (!confirm(`¿Eliminar el registro de ${l.name} (vence ${fechaCorta(l.fecha)})?`)) return;
+  vencimientos = vencimientos.filter(v => v.id !== id);
+  guardarVenc();
+  addAudit('delete', `⏰ Registro de vencimiento eliminado (${fechaCorta(l.fecha)})`, l.name);
+  renderVencimientos(); renderAudit();
+}
+function limpiarVencResueltos() {
+  const n = vencimientos.filter(v => v.estado !== 'Pendiente').length;
+  if (!n) { showToast('No hay lotes resueltos', 'warn'); return; }
+  if (!confirm(`¿Borrar ${n} lotes resueltos? Los pendientes se mantienen.\nConviene exportar a Excel antes.`)) return;
+  vencimientos = vencimientos.filter(v => v.estado === 'Pendiente');
+  guardarVenc();
+  addAudit('system', `⏰ ${n} lotes resueltos borrados`, null);
+  renderVencimientos(); renderAudit();
+  showToast(`🧹 ${n} lotes resueltos borrados`);
+}
+
+// ── Configuración de días de alerta ──
+function renderReglasVenc() {
+  const cont = document.getElementById('venc-reglas-cat');
+  if (!cont) return;
+  cont.innerHTML = (vencReglas.cats || []).map((r, i) => `
+    <div class="venc-regla">
+      <input type="text" list="venc-cat-datalist" placeholder="Ej: PERECIBLES - LACTEOS" value="${escHtml(r.pref)}" data-k="cats" data-i="${i}" data-f="pref" aria-label="Categoría">
+      <input type="number" min="0" inputmode="numeric" value="${escHtml(r.dias)}" data-k="cats" data-i="${i}" data-f="dias" aria-label="Días de alerta">
+      <button class="venc-del" onclick="quitarReglaVenc('cats',${i})" aria-label="Quitar">✕</button>
+    </div>`).join('') || '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Sin categorías: no se pide fecha a ningún producto.</div>';
+  document.getElementById('venc-reglas-prod').innerHTML = (vencReglas.prods || []).map((r, i) => {
+    const m = r.codigo ? buscarMaestro(r.codigo) : null;
+    return `
+    <div class="venc-regla" style="margin-bottom:${m ? 2 : 6}px">
+      <input type="text" inputmode="numeric" placeholder="Código de barras" value="${escHtml(r.codigo)}" data-k="prods" data-i="${i}" data-f="codigo" aria-label="Código">
+      <input type="number" min="0" inputmode="numeric" value="${escHtml(r.dias)}" data-k="prods" data-i="${i}" data-f="dias" aria-label="Días de alerta">
+      <button class="venc-del" onclick="quitarReglaVenc('prods',${i})" aria-label="Quitar">✕</button>
+    </div>${m ? `<div style="font-size:10px;color:var(--muted);margin:0 0 8px 2px">${escHtml(m.name)}</div>` : ''}`;
+  }).join('') || '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Sin excepciones. Usá 0 días para que un producto no pida fecha.</div>';
+  // Sugerencias: rubros del maestro y sus niveles (PERECIBLES, PERECIBLES - LACTEOS, ...)
+  const set = new Set();
+  [...maestro, ...inventory].forEach(x => {
+    const partes = normCat(x.cat || x.rubro).split(' - ').filter(Boolean);
+    for (let i = 1; i <= partes.length; i++) set.add(partes.slice(0, i).join(' - '));
+  });
+  document.getElementById('venc-cat-datalist').innerHTML = [...set].sort().slice(0, 400).map(c => `<option value="${escHtml(c)}">`).join('');
+}
+function leerReglasVenc() {
+  const r = { cats: (vencReglas.cats || []).map(x => Object.assign({}, x)), prods: (vencReglas.prods || []).map(x => Object.assign({}, x)) };
+  document.querySelectorAll('#venc-config [data-k]').forEach(el => {
+    const fila = r[el.dataset.k][+el.dataset.i];
+    if (fila) fila[el.dataset.f] = el.dataset.f === 'dias' ? (parseInt(el.value) || 0) : el.value.trim();
+  });
+  return r;
+}
+function agregarReglaVenc(k) {
+  vencReglas = leerReglasVenc();
+  vencReglas[k].push(k === 'cats' ? { pref: '', dias: 7 } : { codigo: '', dias: 10 });
+  renderReglasVenc();
+  const ins = document.querySelectorAll(`#venc-config [data-k="${k}"]`);
+  if (ins.length) ins[ins.length - 2].focus();
+}
+function quitarReglaVenc(k, i) {
+  vencReglas = leerReglasVenc();
+  vencReglas[k].splice(i, 1);
+  renderReglasVenc();
+}
+function guardarReglasVenc() {
+  const r = leerReglasVenc();
+  r.cats  = r.cats.filter(x => normCat(x.pref)).map(x => ({ pref: normCat(x.pref), dias: Math.max(0, parseInt(x.dias) || 0) }));
+  r.prods = r.prods.filter(x => normCod(x.codigo)).map(x => ({ codigo: normCod(x.codigo), dias: Math.max(0, parseInt(x.dias) || 0) }));
+  vencReglas = r;
+  localStorage.setItem('mm_venc_reglas', JSON.stringify(vencReglas));
+  addAudit('system', `⏰ Días de alerta actualizados (${r.cats.length} categorías, ${r.prods.length} productos)`, null);
+  renderReglasVenc(); renderVencimientos(); renderAudit();
+  showToast('✅ Configuración guardada');
+}
+
+// ── Exportar y Google Sheets ──
+function exportarVencimientos() {
+  if (!vencimientos.length) { showToast('No hay vencimientos para exportar', 'warn'); return; }
+  const rows = [['Código','Código alternativo','Producto','Rubro','Fecha vencimiento','Días restantes','Cantidad',
+                 'Área','Sector','Registró','Fecha registro','Estado','Acción por','Fecha acción','Nota']];
+  [...vencimientos].sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))).forEach(v => {
+    rows.push([v.barcode || '', v.barcode2 || '', v.name, v.cat || '', fechaCorta(v.fecha), diasHasta(v.fecha), v.qty,
+               v.zona || '', v.gondola || '', v.ultimoOperador || v.operator || '', v.ultimaVez || v.registrado || '',
+               v.estado, v.accionPor || '', v.accionFecha || '', v.nota || '']);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:15},{wch:15},{wch:36},{wch:26},{wch:12},{wch:9},{wch:9},{wch:16},{wch:8},{wch:14},{wch:20},{wch:11},{wch:14},{wch:20},{wch:24}];
+  ws['!autofilter'] = { ref: `A1:O${rows.length}` };
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Vencimientos');
+  XLSX.writeFile(wb, `Vencimientos_${hoyISO()}.xlsx`);
+  showToast('📊 Vencimientos exportados');
+}
+async function sendVencToSheets(l, evento) {
+  if (!sheetsUrl || !l) return;
+  try {
+    const params = new URLSearchParams({
+      accion: 'vencimiento', evento: evento || 'nuevo', id: l.id,
+      barcode: l.barcode || '', name: l.name || '', cat: l.cat || '',
+      fecha: fechaCorta(l.fecha), dias: diasHasta(l.fecha) ?? '', qty: l.qty || 0,
+      sector: [l.zona, l.gondola].filter(Boolean).join(' › '),
+      operator: l.ultimoOperador || l.operator || '', registrado: l.ultimaVez || l.registrado || '',
+      estado: l.estado || 'Pendiente', accionPor: l.accionPor || '', accionFecha: l.accionFecha || '', nota: l.nota || ''
+    });
+    await fetch(`${sheetsUrl}?${params.toString()}`, { method: 'GET', mode: 'no-cors' });
+  } catch (e) { console.warn('Sheets vencimiento error:', e); }
+}
+renderVencimientos();
 </script>
 </body>
 </html>

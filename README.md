@@ -17,3 +17,14 @@ App para contar el inventario con el celular (`inventario-scanner.html`).
 - Acepta kilos con decimales y cantidad 0.
 - Recepción B1–B7 y Mesa de trabajo T1–T11, como en los planos.
 - Aviso de conteo sin exportar, copia de seguridad, restaurar y recuperar lo último borrado.
+
+## Módulo Vencimientos (noviembre 2026)
+- Al escanear un producto cuya categoría tiene **días de alerta**, la app pide la fecha del lote más próximo.
+  - Faltan más días que el límite → avisa OK y no guarda nada.
+  - Dentro del límite → alerta amarilla/naranja y guarda el lote con su cantidad.
+  - Vencido → alerta roja para retirarlo.
+  - Botón para guardar otro lote con distinta fecha del mismo producto.
+- Pestaña **⏰ Vencim.**: lotes con semáforo, filtros, control rápido de góndolas (registra fechas sin sumar al conteo) y exportar a Excel.
+- Gerente, Dueño/a, Supervisor/a y Encargado/a marcan qué se hizo con cada lote (rebajado, al frente, devuelto, merma) y configuran los días de alerta por rubro (ej. `PERECIBLES - LACTEOS` = 15) o por producto (0 = no pedir fecha).
+- Los datos de vencimientos se guardan aparte (`mm_venc`, `mm_venc_reglas`): borrar el inventario no los borra. Entran en la copia de seguridad.
+- Google Sheets: agregar `apps-script-vencimientos.gs` al Apps Script para tener la hoja **VENCIMIENTOS**.
