@@ -688,7 +688,7 @@
           <span style="color:var(--muted)">🔍</span>
           <input id="search-input" type="text" placeholder="Buscar..." oninput="renderList()">
         </div>
-        <button onclick="clearAll()" style="background:transparent;border:1px solid rgba(211,47,47,0.4);color:var(--rojo);padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap;transition:all 0.2s;" onmouseover="this.style.background='var(--rojo)';this.style.color='#fff'" onmouseout="this.style.background='transparent';this.style.color='var(--rojo)'">🗑️ Borrar todo</button>
+        <span id="btn-borrar-todo-wrap"></span>
       </div>
     </div>
     <div class="chips" id="category-chips">
@@ -831,8 +831,8 @@
         </div>
       </div>
 
-      <!-- BORRAR TODO -->
-      <div class="export-card" onclick="clearAll()">
+      <!-- BORRAR TODO — solo Dueño/a -->
+      <div id="export-card-borrar" class="export-card" onclick="clearAll()" style="display:none">
         <div class="export-icon">🗑️</div>
         <div class="export-info">
           <h3 style="color:var(--rojo)">Borrar todo el inventario</h3>
@@ -1126,6 +1126,23 @@ function startApp() {
   // form fields
   document.getElementById('inp-operator').value  = operator.name;
   document.getElementById('inp-datetime').value  = nowStr();
+
+  // Mostrar/ocultar pestaña Exportar según rol
+  const tabExportar = document.querySelector('.tab[onclick*="export"]');
+  if (tabExportar) tabExportar.style.display = puedeExportar() ? '' : 'none';
+
+  // Botón Borrar todo en pestaña Inventario — solo Dueño/a
+  const wrapBorrar = document.getElementById('btn-borrar-todo-wrap');
+  if (wrapBorrar) {
+    wrapBorrar.innerHTML = esDuenio()
+      ? `<button onclick="clearAll()" style="background:transparent;border:1px solid rgba(211,47,47,0.4);color:var(--rojo);padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap;transition:all 0.2s;" onmouseover="this.style.background='var(--rojo)';this.style.color='#fff'" onmouseout="this.style.background='transparent';this.style.color='var(--rojo)'">🗑️ Borrar todo</button>`
+      : '';
+  }
+
+  // Tarjeta Borrar todo en Exportar — solo Dueño/a
+  const cardBorrar = document.getElementById('export-card-borrar');
+  if (cardBorrar) cardBorrar.style.display = esDuenio() ? '' : 'none';
+
   refreshAll();
   startClock();
   initUbicacion();
@@ -1308,7 +1325,7 @@ function renderList() {
           <span class="qty-val">${item.qty}</span>
           <button class="qty-btn" onclick="changeQty(${realIdx},1)">+</button>
         </div>
-        <button class="del-btn" onclick="deleteItem(${realIdx})">🗑 Eliminar</button>
+        ${esDuenio() ? `<button class="del-btn" onclick="deleteItem(${realIdx})">🗑 Eliminar</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -2581,9 +2598,26 @@ function esGerente() {
          rolesGerente.includes(operator.role);
 }
 
-// ══ MOSTRAR DIFERENCIA AL GERENTE ══
+function esDuenio() {
+  if (!operator) return false;
+  return operator.role === 'Dueño/a';
+}
+
+function puedeExportar() {
+  if (!operator) return false;
+  const rolesExportar = ['Gerente','Dueño/a','Supervisor/a','Encargado/a'];
+  return rolesExportar.some(r => operator.role === r);
+}
+
+function veDiferencia() {
+  if (!operator) return false;
+  const rolesDiff = ['Gerente','Dueño/a','Supervisor/a','Encargado/a'];
+  return rolesDiff.some(r => operator.role === r);
+}
+
+// ══ MOSTRAR DIFERENCIA (Gerente, Dueño, Supervisor, Encargado) ══
 function mostrarDiferencia(item, cantidadAgregada) {
-  if (!esGerente()) return; // solo gerente ve la diferencia
+  if (!veDiferencia()) return;
 
   const stockSistema = item.stockSistema || 0;
   const cantContada  = totalContado(item); // suma de todos los sectores
