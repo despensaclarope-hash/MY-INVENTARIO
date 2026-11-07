@@ -1131,17 +1131,17 @@ function startApp() {
   const tabExportar = document.querySelector('.tab[onclick*="export"]');
   if (tabExportar) tabExportar.style.display = puedeExportar() ? '' : 'none';
 
-  // Botón Borrar todo en pestaña Inventario — solo Dueño/a
+  // Botón Borrar todo en pestaña Inventario — Dueño/a y Gerente
   const wrapBorrar = document.getElementById('btn-borrar-todo-wrap');
   if (wrapBorrar) {
-    wrapBorrar.innerHTML = esDuenio()
+    wrapBorrar.innerHTML = puedeBorrar()
       ? `<button onclick="clearAll()" style="background:transparent;border:1px solid rgba(211,47,47,0.4);color:var(--rojo);padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap;transition:all 0.2s;" onmouseover="this.style.background='var(--rojo)';this.style.color='#fff'" onmouseout="this.style.background='transparent';this.style.color='var(--rojo)'">🗑️ Borrar todo</button>`
       : '';
   }
 
-  // Tarjeta Borrar todo en Exportar — solo Dueño/a
+  // Tarjeta Borrar todo en Exportar — Dueño/a y Gerente
   const cardBorrar = document.getElementById('export-card-borrar');
-  if (cardBorrar) cardBorrar.style.display = esDuenio() ? '' : 'none';
+  if (cardBorrar) cardBorrar.style.display = puedeBorrar() ? '' : 'none';
 
   refreshAll();
   startClock();
@@ -2601,6 +2601,11 @@ function esGerente() {
 function esDuenio() {
   if (!operator) return false;
   return operator.role === 'Dueño/a';
+}
+
+function puedeBorrar() {
+  if (!operator) return false;
+  return operator.role === 'Dueño/a' || operator.role === 'Gerente';
 }
 
 function puedeExportar() {
