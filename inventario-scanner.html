@@ -79,6 +79,10 @@
     display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 100;
   }
   .logo { font-size: 26px; }
+  .sync-chip { margin-left: auto; flex: 0 0 auto; background: var(--card2); border: 1px solid var(--border); color: var(--muted); border-radius: 20px; padding: 6px 10px; font-size: 11px; font-weight: 700; font-family: var(--font); cursor: pointer; white-space: nowrap; max-width: 46%; overflow: hidden; text-overflow: ellipsis; }
+  .sync-chip.ok { color: var(--verde); border-color: rgba(0,200,83,0.4); }
+  .sync-chip.pend { color: #FFB74D; border-color: rgba(255,152,0,0.5); }
+  .sync-chip.err { color: #FF8A80; border-color: rgba(211,47,47,0.5); }
   .header-text h1 { font-size: 17px; font-weight: 700; color: var(--verde); letter-spacing: -0.3px; }
   .header-text p  { font-size: 11px; color: var(--muted); }
 
@@ -421,6 +425,7 @@
       <h1>Inventario MiniMarket</h1>
       <p id="session-info">Sesión activa</p>
     </div>
+    <button type="button" class="sync-chip" id="sync-chip" onclick="irASync()">⚪ Solo este celular</button>
   </header>
 
   <div class="stats-bar">
@@ -909,8 +914,8 @@
       <div class="export-card" onclick="showSheetsPanel()" style="border-color:rgba(21,101,192,0.4);background:rgba(21,101,192,0.06)">
         <div class="export-icon">📡</div>
         <div class="export-info">
-          <h3 style="color:#64B5F6">Sincronizar con Google Sheets</h3>
-          <p>Cada escaneo se guarda en tu planilla en tiempo real</p>
+          <h3 style="color:#64B5F6">Compartir entre celulares (Google Sheets)</h3>
+          <p>Maestro, conteo, góndolas terminadas y vencimientos iguales en todos los celulares</p>
         </div>
       </div>
 
@@ -980,8 +985,8 @@
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
         <span style="font-size:24px">📡</span>
         <div>
-          <div style="font-weight:800;font-size:14px;color:#64B5F6">Sincronización con Google Sheets</div>
-          <div style="font-size:11px;color:var(--muted)">Cada producto escaneado se envía a tu planilla</div>
+          <div style="font-weight:800;font-size:14px;color:#64B5F6">Compartir entre celulares</div>
+          <div style="font-size:11px;color:var(--muted)">Todos los celulares con la misma URL ven los mismos datos (cada 20 segundos)</div>
         </div>
       </div>
       <div style="margin-bottom:12px;">
@@ -991,44 +996,218 @@
       <div style="display:flex;gap:8px;margin-bottom:12px;">
         <button class="btn btn-blue" onclick="saveSheetUrl()" style="flex:1;font-size:12px;padding:10px;">💾 Guardar URL</button>
         <button class="btn btn-secondary" onclick="testSheetConnection()" style="flex:1;font-size:12px;padding:10px;">🔗 Probar conexión</button>
-        <button class="btn btn-secondary" onclick="syncAllToSheets()" style="flex:1;font-size:12px;padding:10px;">⬆️ Enviar todo</button>
+        <button class="btn btn-secondary" onclick="syncAllToSheets()" style="flex:1;font-size:12px;padding:10px;">🔄 Sincronizar ya</button>
       </div>
+      <button class="btn btn-secondary" onclick="copiarEnlaceSync()" style="width:100%;font-size:12px;padding:10px;margin-bottom:12px;">📲 Copiar enlace para configurar otros celulares</button>
       <div id="sheets-status" style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:12px;"></div>
       <div style="background:var(--bg);border-radius:10px;padding:14px;font-size:11px;color:var(--muted);line-height:1.9;">
         <strong style="color:var(--text);display:block;margin-bottom:6px;">📋 Cómo configurarlo (5 minutos):</strong>
-        1. Abrí <strong style="color:#64B5F6">Google Sheets</strong> → creá una planilla nueva<br>
+        1. En la computadora abrí <strong style="color:#64B5F6">sheets.google.com</strong> → Hoja de cálculo en blanco<br>
         2. Menú <strong style="color:var(--text)">Extensiones → Apps Script</strong><br>
         3. Borrá el código que hay y pegá el script que te doy abajo<br>
         4. Clic en <strong style="color:var(--text)">Implementar → Nueva implementación → Aplicación web</strong><br>
         5. Acceso: <strong style="color:var(--text)">"Cualquier usuario"</strong> → Implementar → Copiá la URL<br>
-        6. Pegá esa URL arriba y tocá <strong style="color:var(--verde)">Guardar URL</strong>
+        6. Pegá esa URL arriba y tocá <strong style="color:var(--verde)">Guardar URL</strong><br>
+        7. Para los demás celulares: tocá <strong style="color:var(--text)">📲 Copiar enlace</strong> y mandalo por WhatsApp; al abrirlo quedan conectados
       </div>
-      <div style="margin-top:12px;background:#0D1117;border-radius:8px;padding:12px;font-size:10px;color:#8B949E;font-family:monospace;overflow-x:auto;white-space:pre;line-height:1.7" id="apps-script-code">function doPost(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  const data  = JSON.parse(e.postData.contents);
+      <div style="margin-top:12px;background:#0D1117;border-radius:8px;padding:12px;font-size:10px;color:#8B949E;font-family:monospace;overflow-x:auto;white-space:pre;line-height:1.7" id="apps-script-code">// ═══════════════════════════════════════════════════════════════════════════
+//  INVENTARIO CLAROPE — Sincronización entre celulares (Google Apps Script)
+//
+//  Cómo instalarlo (una sola vez, desde la computadora):
+//   1. sheets.google.com → Hoja de cálculo en blanco → ponele de nombre "Inventario CLAROPE".
+//   2. Menú Extensiones → Apps Script. Borrá lo que haya y pegá TODO este archivo. Guardá (💾).
+//   3. Implementar → Nueva implementación → ⚙️ Tipo: Aplicación web.
+//        Ejecutar como: Yo   ·   Quién tiene acceso: Cualquier usuario
+//      Implementar → Autorizar acceso (elegí tu cuenta → Avanzado → Ir a … → Permitir).
+//   4. Copiá la URL de la aplicación web (termina en /exec).
+//   5. En la app: 💾 Exportar → 📡 Google Sheets → pegá la URL → Guardar URL. En cada celular.
+//
+//  Las hojas se crean solas: MAESTRO, CONTEO, TERMINADAS, VENCIMIENTOS y CONFIG.
+//  No edites a mano las columnas Actualizado, Borrado ni _datos: son las que usa la app.
+// ═══════════════════════════════════════════════════════════════════════════
 
-  // Cabecera si la planilla está vacía
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(['Código','Nombre','Cantidad','Precio',
-                     'Categoría','Operador','Fecha/Hora','Local']);
+const TIPOS = {
+  inv: {
+    hoja: 'CONTEO',
+    cab: ['ID', 'Código', 'Producto', 'Cantidad', 'Precio', 'Rubro', 'Zona', 'Góndola', 'Nivel', 'Operador', 'Fecha/Hora'],
+    fila: d =&gt; [d.id, d.barcode || '', d.name || '', Number(d.qty) || 0, Number(d.price) || 0, d.cat || '',
+                d.zona || '', d.gondola || '', d.nivel || '', d.lastOperator || d.operator || '', d.lastUpdate || d.datetime || '']
+  },
+  term: {
+    hoja: 'TERMINADAS',
+    cab: ['Clave', 'Zona', 'Góndola', 'Terminó', 'Fecha', 'Productos', 'Unidades'],
+    fila: d =&gt; [d.key || '', d.zona || '', d.gondola || '', d.por || '', d.fecha || '', Number(d.productos) || 0, Number(d.unidades) || 0]
+  },
+  venc: {
+    hoja: 'VENCIMIENTOS',
+    cab: ['ID', 'Código', 'Producto', 'Rubro', 'Vence', 'Cantidad', 'Vendidas', 'Sector', 'Registró', 'Estado', 'Acción por', 'Fecha acción', 'Nota'],
+    fila: d =&gt; [d.id || '', d.barcode || '', d.name || '', d.cat || '', d.fecha || '', Number(d.qty) || 0, Number(d.vendidas) || 0,
+                [d.zona, d.gondola].filter(String).join(' › '), d.ultimoOperador || d.operator || '', d.estado || 'Pendiente',
+                d.accionPor || '', d.accionFecha || '', d.nota || '']
   }
+};
+const EXTRA = ['Actualizado', 'Borrado', '_datos'];
+const MAESTRO_CAB = ['Código', 'Código 2', 'Nombre', 'Rubro', 'Stock', 'Precio', 'Costo'];
 
-  if (Array.isArray(data)) {
-    data.forEach(function(p) {
-      sheet.appendRow([p.barcode||'', p.name, p.qty,
-        p.price||0, p.cat||'', p.operator||'',
-        p.datetime||'', p.store||'']);
+// ── Entradas web ──
+function doGet(e) {
+  const p = (e &amp;&amp; e.parameter) || {};
+  try {
+    if (p.accion === 'sync')    return json(sync(Number(p.desde) || 0));
+    if (p.accion === 'maestro') return json(leerMaestro());
+    return json({ ok: true, msg: 'Conectado a Inventario CLAROPE', ahora: Date.now(), maestroVer: Number(getConfig('maestroVer')) || 0 });
+  } catch (err) {
+    return json({ ok: false, error: String(err &amp;&amp; err.message || err) });
+  }
+}
+
+function doPost(e) {
+  let body = {};
+  try { body = JSON.parse((e &amp;&amp; e.postData &amp;&amp; e.postData.contents) || '{}'); } catch (err) { return json({ ok: false, error: 'JSON inválido' }); }
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    if (body.accion === 'push')    return json(push(body));
+    if (body.accion === 'maestro') return json(guardarMaestro(body.items || []));
+    return json({ ok: false, error: 'Acción desconocida' });
+  } catch (err) {
+    return json({ ok: false, error: String(err &amp;&amp; err.message || err) });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function json(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+function redondear(n) { return Math.round((Number(n) || 0) * 1000) / 1000; }
+
+// ── Hojas ──
+function hojaDe(nombre, cab) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(nombre);
+  if (!sh) {
+    sh = ss.insertSheet(nombre);
+    sh.getRange(1, 1, 1, cab.length).setValues([cab]).setFontWeight('bold').setBackground('#0F172A').setFontColor('#FFFFFF');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function leerFilas(sh, ncol) {
+  const ult = sh.getLastRow();
+  if (ult &lt; 2) return [];
+  return sh.getRange(2, 1, ult - 1, ncol).getValues();
+}
+function getConfig(clave) {
+  const sh = hojaDe('CONFIG', ['Clave', 'Valor', 'Actualizado']);
+  const filas = leerFilas(sh, 3);
+  const f = filas.find(r =&gt; r[0] === clave);
+  return f ? f[1] : '';
+}
+function getConfigFila(clave) {
+  const sh = hojaDe('CONFIG', ['Clave', 'Valor', 'Actualizado']);
+  return leerFilas(sh, 3).find(r =&gt; r[0] === clave) || null;
+}
+function setConfig(clave, valor, ahora) {
+  const sh = hojaDe('CONFIG', ['Clave', 'Valor', 'Actualizado']);
+  const filas = leerFilas(sh, 3);
+  const i = filas.findIndex(r =&gt; r[0] === clave);
+  const fila = [clave, valor, ahora || Date.now()];
+  if (i &gt;= 0) sh.getRange(i + 2, 1, 1, 3).setValues([fila]);
+  else sh.getRange(filas.length + 2, 1, 1, 3).setValues([fila]);
+}
+
+// ── Recibir cambios de un celular ──
+// op: { t: 'inv'|'term'|'venc', id, op: 'upsert'|'delete', data, dq (suma de cantidad), dv (suma de vendidas), abs }
+// Las cantidades se SUMAN (dq) sobre lo que ya hay: si dos celulares cuentan a la vez, no se pisan.
+function push(body) {
+  const ahora = Date.now();
+  const ops = body.ops || [];
+  Object.keys(TIPOS).forEach(t =&gt; {
+    const mias = ops.filter(o =&gt; o.t === t);
+    if (mias.length) aplicar(t, mias, ahora);
+  });
+  if (body.reglas) setConfig('reglas', JSON.stringify(body.reglas), ahora);
+  return { ok: true, ahora: ahora, recibidos: ops.length };
+}
+
+function aplicar(t, ops, ahora) {
+  const def = TIPOS[t];
+  const cab = def.cab.concat(EXTRA);
+  const ncol = cab.length;
+  const sh = hojaDe(def.hoja, cab);
+  const filas = leerFilas(sh, ncol);
+  const idx = {};
+  filas.forEach((r, i) =&gt; { idx[String(r[0])] = i; });
+  ops.forEach(o =&gt; {
+    const id = String(o.id);
+    const i = idx[id];
+    const previa = i === undefined ? null : filas[i];
+    const borrada = previa ? previa[ncol - 2] === 1 || previa[ncol - 2] === '1' : true;
+    if (o.op === 'delete') {
+      if (previa) { previa[ncol - 3] = ahora; previa[ncol - 2] = 1; }
+      return;
+    }
+    const d = Object.assign({}, o.data || {});
+    if (previa &amp;&amp; !borrada &amp;&amp; !o.abs) {
+      let actual = {};
+      try { actual = JSON.parse(previa[ncol - 1] || '{}'); } catch (err) {}
+      if (o.dq !== undefined) d.qty = redondear((Number(actual.qty) || 0) + (Number(o.dq) || 0));
+      if (o.dv !== undefined) d.vendidas = redondear((Number(actual.vendidas) || 0) + (Number(o.dv) || 0));
+    }
+    const fila = def.fila(d).concat([ahora, '', JSON.stringify(d)]);
+    if (previa) filas[i] = fila;
+    else { filas.push(fila); idx[id] = filas.length - 1; }
+  });
+  if (filas.length) {
+    sh.getRange(2, 1, filas.length, 2).setNumberFormat('@');   // ID y código como texto (no perder ceros)
+    sh.getRange(2, 1, filas.length, ncol).setValues(filas);
+  }
+}
+
+// ── Enviar a un celular lo que cambió desde su última consulta ──
+function sync(desde) {
+  const ahora = Date.now();
+  const res = { ok: true, ahora: ahora };
+  Object.keys(TIPOS).forEach(t =&gt; {
+    const def = TIPOS[t];
+    const cab = def.cab.concat(EXTRA);
+    const ncol = cab.length;
+    const filas = leerFilas(hojaDe(def.hoja, cab), ncol);
+    res[t] = filas.filter(r =&gt; Number(r[ncol - 3]) &gt; desde).map(r =&gt; {
+      let data = null;
+      try { data = JSON.parse(r[ncol - 1] || 'null'); } catch (err) {}
+      return { id: String(r[0]), del: r[ncol - 2] === 1 || r[ncol - 2] === '1', data: data };
     });
-  } else {
-    sheet.appendRow([data.barcode||'', data.name, data.qty,
-      data.price||0, data.cat||'', data.operator||'',
-      data.datetime||'', data.store||'']);
-  }
+  });
+  const reglas = getConfigFila('reglas');
+  if (reglas &amp;&amp; Number(reglas[2]) &gt; desde) { try { res.reglas = JSON.parse(reglas[1]); } catch (err) {} }
+  res.maestroVer = Number(getConfig('maestroVer')) || 0;
+  return res;
+}
 
-  return ContentService
-    .createTextOutput(JSON.stringify({ok:true}))
-    .setMimeType(ContentService.MimeType.JSON);
-}</div>
+// ── Maestro compartido ──
+function guardarMaestro(items) {
+  const ahora = Date.now();
+  const sh = hojaDe('MAESTRO', MAESTRO_CAB);
+  const ult = sh.getLastRow();
+  if (ult &gt; 1) sh.getRange(2, 1, ult - 1, MAESTRO_CAB.length).clearContent();
+  const filas = items.map(m =&gt; [m.barcode || '', m.barcode2 || '', m.name || '', m.cat || m.rubro || '',
+                                Number(m.qty) || 0, Number(m.price) || 0, Number(m.cost) || 0]);
+  if (filas.length) {
+    sh.getRange(2, 1, filas.length, 2).setNumberFormat('@');   // códigos como texto (no perder ceros)
+    sh.getRange(2, 1, filas.length, MAESTRO_CAB.length).setValues(filas);
+  }
+  setConfig('maestroVer', ahora, ahora);
+  return { ok: true, ahora: ahora, maestroVer: ahora, productos: filas.length };
+}
+function leerMaestro() {
+  const sh = hojaDe('MAESTRO', MAESTRO_CAB);
+  const filas = leerFilas(sh, MAESTRO_CAB.length).filter(r =&gt; r[2] !== '');
+  return { ok: true, maestroVer: Number(getConfig('maestroVer')) || 0,
+           items: filas.map(r =&gt; [String(r[0]), String(r[1]), String(r[2]), String(r[3]), Number(r[4]) || 0, Number(r[5]) || 0, Number(r[6]) || 0]) };
+}
+</div>
       <button onclick="copyScriptCode()" style="margin-top:8px;width:100%;background:transparent;border:1px solid var(--border);color:var(--muted);padding:8px;border-radius:8px;font-size:11px;cursor:pointer;font-family:var(--font);">📋 Copiar script</button>
     </div>
 
@@ -1340,6 +1519,27 @@ let planoActivo = PLANO_DE_ZONA[(JSON.parse(localStorage.getItem('mm_ubicacion')
 let modoUbic = localStorage.getItem('mm_ubic_modo') || 'plano';
 // Góndolas con conteo terminado: { 'ZONA|GONDOLA': { por, fecha, iso, productos, unidades } }
 let terminadas = JSON.parse(localStorage.getItem('mm_terminadas') || '{}');
+// ══ Sincronización entre celulares (Google Sheets) ══
+let syncShadow = JSON.parse(localStorage.getItem('mm_sync_shadow') || 'null');   // lo que el servidor ya conoce
+let syncCola   = JSON.parse(localStorage.getItem('mm_sync_cola') || '[]');       // cambios pendientes de enviar
+let syncDesde  = Number(localStorage.getItem('mm_sync_desde')) || 0;
+let syncMaestroVer = Number(localStorage.getItem('mm_maestro_ver')) || 0;
+let syncSubirMaestro = localStorage.getItem('mm_maestro_subir') === '1';
+let syncEstado = { ok: null, ultimo: 0, error: '' };
+let syncEnCurso = false, syncTimer = null;
+(function () {   // enlace de configuración: ...inventario-scanner.html?sync=URL
+  try {
+    const u = new URLSearchParams(location.search).get('sync');
+    if (u && /^https:\/\/script\.google(usercontent)?\.com\//.test(u)) {
+      if (localStorage.getItem('mm_sheets_url') !== u) {
+        localStorage.setItem('mm_sheets_url', u);
+        ['mm_sync_shadow', 'mm_sync_cola', 'mm_sync_desde'].forEach(k => localStorage.removeItem(k));
+        syncShadow = null; syncCola = []; syncDesde = 0;
+      }
+      history.replaceState(null, '', location.pathname);
+    }
+  } catch (e) {}
+})();
 
 // ══ TIMING ══
 let tiempoSesion = JSON.parse(localStorage.getItem('mm_tiempo') || '{"inicio":null,"productos":0,"tiempos":[]}');
@@ -1579,6 +1779,7 @@ function save() {
   localStorage.setItem('mm_inv',   JSON.stringify(inventory));
   localStorage.setItem('mm_audit', JSON.stringify(auditLog));
   refreshAll();
+  syncCambio();
 }
 
 function refreshAll() {
@@ -1778,7 +1979,7 @@ function addProduct() {
   }
 
   const item = {
-    id: Date.now(), barcode: nuevo.barcode || barcode, barcode2: nuevo.barcode2 || barcode2,
+    id: nuevoId(), barcode: nuevo.barcode || barcode, barcode2: nuevo.barcode2 || barcode2,
     name, qty, price, cat, minStock,
     zona:    ubicacion.zona    || '',
     gondola: ubicacion.gondola || '',
@@ -1838,7 +2039,8 @@ function clearAll() {
     (inventory.length && maestro.length) ? '💥 Borrar TODO (inventario + maestro)' : null,
   ].filter(Boolean);
 
-  const msg = opciones.join('\n') + '\n\n¿Confirmar? Escribí:\n1 = solo inventario\n2 = solo maestro\n3 = todo';
+  const msg = opciones.join('\n') + '\n\n¿Confirmar? Escribí:\n1 = solo inventario\n2 = solo maestro\n3 = todo' +
+    (syncActivo() ? '\n\n⚠️ Celulares conectados: el inventario se borra en TODOS (el maestro solo en este).' : '');
   const resp = prompt(msg);
   if (!resp) return;
   if ((resp === '1' || resp === '3') && inventory.length) localStorage.setItem('mm_inv_prev', JSON.stringify(inventory));
@@ -2412,7 +2614,7 @@ function importXLSX(input) {
             updated++;
           } else {
             inventory.push({
-              id: Date.now() + i,
+              id: nuevoId(),
               barcode: cod1, barcode2: cod2,
               name, qty, stockSistema: qty,
               price, cost, cat, minStock,
@@ -2460,6 +2662,7 @@ function importXLSX(input) {
       }
 
       if (isMaestro) {
+        syncSubirMaestro = true; localStorage.setItem('mm_maestro_subir', '1');
         addAudit('system', `Maestro importado: ${added} productos de referencia (${skipped} sin nombre omitidos)`, null);
         inventory.forEach(i => completarDesdeMaestro(i));
         save();
@@ -2759,10 +2962,15 @@ function showSheetsPanel() {
 }
 
 function saveSheetUrl() {
-  sheetsUrl = document.getElementById('sheets-url').value.trim();
+  const nueva = document.getElementById('sheets-url').value.trim();
+  if (nueva && !/^https:\/\/script\.google\.com\//.test(nueva)) { showToast('⚠️ La URL debe empezar con https://script.google.com/', 'warn'); return; }
+  if (nueva !== sheetsUrl) syncReiniciar();
+  sheetsUrl = nueva;
   localStorage.setItem('mm_sheets_url', sheetsUrl);
-  showToast('✅ URL guardada');
-  setSheetsStatus('✅ URL guardada — cada escaneo se sincroniza automáticamente', 'green');
+  showToast(sheetsUrl ? '✅ URL guardada — conectando...' : 'Sincronización desactivada');
+  setSheetsStatus(sheetsUrl ? '🔄 Conectando con la planilla...' : 'Sin URL: los datos quedan solo en este celular', 'yellow');
+  if (sheetsUrl) syncCiclo(true).then(() => setSheetsStatus(syncEstado.ok ? '✅ Conectado — los celulares se sincronizan solos' : '❌ ' + (syncEstado.error || 'No se pudo conectar'), syncEstado.ok ? 'green' : 'red'));
+  syncPintar();
 }
 
 function setSheetsStatus(msg, color) {
@@ -2772,6 +2980,7 @@ function setSheetsStatus(msg, color) {
 }
 
 async function sendToSheets(productData) {
+  return;   // reemplazado por la sincronización entre celulares (syncCiclo)
   if (!sheetsUrl) return;
   try {
     // Usamos GET con parámetros para evitar bloqueos CORS de Apps Script
@@ -2811,6 +3020,11 @@ async function testSheetConnection() {
 
 async function syncAllToSheets() {
   if (!sheetsUrl) { showToast('⚠️ Primero guardá la URL', 'warn'); return; }
+  setSheetsStatus('🔄 Sincronizando...', 'yellow');
+  await syncCiclo(true);
+  if (syncEstado.ok) { setSheetsStatus('✅ Sincronizado ' + new Date().toLocaleTimeString('es-AR'), 'green'); showToast('✅ Sincronizado'); }
+  else { setSheetsStatus('❌ ' + (syncEstado.error || 'Sin conexión'), 'red'); showToast('❌ No se pudo sincronizar', 'error'); }
+  return;
   if (!inventory.length) { showToast('No hay productos para sincronizar', 'warn'); return; }
   setSheetsStatus(`🔄 Enviando ${inventory.length} productos...`, 'yellow');
   try {
@@ -2945,7 +3159,7 @@ function setModoUbic(m) {
 function selPlano(k) { planoActivo = k; renderPlano(); }
 
 // ══ CONTEO TERMINADO POR GÓNDOLA ══
-function guardarTerminadas() { localStorage.setItem('mm_terminadas', JSON.stringify(terminadas)); }
+function guardarTerminadas() { localStorage.setItem('mm_terminadas', JSON.stringify(terminadas)); syncCambio(); }
 function resumenGondola(zona, gondola) {
   const items = inventory.filter(i => i.zona === zona && i.gondola === gondola);
   return { productos: items.length, unidades: redondear(items.reduce((a, i) => a + (Number(i.qty) || 0), 0)) };
@@ -3477,6 +3691,7 @@ function confirmFoundProduct() {
   // Si el item viene del maestro (aún no fue escaneado), crear nuevo registro en inventory
   if (foundProductRef._desdeMaestro) {
     const nuevoItem = {
+      id:        nuevoId(),
       barcode:   foundProductRef.barcode  || '',
       barcode2:  foundProductRef.barcode2 || '',
       name:      foundProductRef.name     || '',
@@ -3538,7 +3753,7 @@ document.getElementById('inp-name').addEventListener('keydown', e => { if(e.key=
 //  No modifica el conteo: solo agrega registros de lotes próximos a vencer.
 // ═══════════════════════════════════════════════════════════════════
 
-function guardarVenc() { localStorage.setItem('mm_venc', JSON.stringify(vencimientos)); }
+function guardarVenc() { localStorage.setItem('mm_venc', JSON.stringify(vencimientos)); syncCambio(); }
 function normCat(c) { return String(c || '').toUpperCase().replace(/\s+/g, ' ').trim(); }
 function catDe(item) {
   if (!item) return '';
@@ -4144,6 +4359,7 @@ function guardarReglasVenc() {
   r.prods = r.prods.filter(x => normCod(x.codigo)).map(x => ({ codigo: normCod(x.codigo), dias: Math.max(0, parseInt(x.dias) || 0) }));
   vencReglas = r;
   localStorage.setItem('mm_venc_reglas', JSON.stringify(vencReglas));
+  syncCambio();
   addAudit('system', `⏰ Días de alerta actualizados (${r.cats.length} reglas${r.off.length ? ', sin controlar: ' + r.off.map(nombreGrupo).join(', ') : ''}, ${r.prods.length} productos)`, null);
   renderReglasVenc(); renderVencimientos(); renderAudit();
   showToast('✅ Configuración guardada');
@@ -4168,6 +4384,7 @@ function exportarVencimientos() {
   showToast('📊 Vencimientos exportados');
 }
 async function sendVencToSheets(l, evento) {
+  return;   // reemplazado por la sincronización entre celulares (syncCiclo)
   if (!sheetsUrl || !l) return;
   try {
     const params = new URLSearchParams({
@@ -4182,6 +4399,248 @@ async function sendVencToSheets(l, evento) {
   } catch (e) { console.warn('Sheets vencimiento error:', e); }
 }
 renderVencimientos();
+
+// ═══════════════════════════════════════════════════════════════════
+//  🔄 SINCRONIZACIÓN ENTRE CELULARES (Google Sheets + apps-script-sync.gs)
+//  Cada cambio local se compara con lo que el servidor ya conoce (syncShadow)
+//  y se encola. Las cantidades viajan como diferencia (dq) para que dos
+//  celulares contando a la vez no se pisen. Cada 20 s: enviar → recibir.
+// ═══════════════════════════════════════════════════════════════════
+function nuevoId() { return Date.now() * 1000 + Math.floor(Math.random() * 1000); }
+function syncActivo() { return !!(sheetsUrl && operator); }
+function syncGuardarEstado() {
+  localStorage.setItem('mm_sync_shadow', JSON.stringify(syncShadow));
+  localStorage.setItem('mm_sync_cola', JSON.stringify(syncCola));
+  localStorage.setItem('mm_sync_desde', String(syncDesde));
+}
+function syncReiniciar() {
+  syncShadow = null; syncCola = []; syncDesde = 0; syncMaestroVer = 0;
+  localStorage.removeItem('mm_maestro_ver');
+  syncGuardarEstado();
+}
+function syncSnap(t) {
+  const o = {};
+  if (t === 'inv') inventory.forEach(i => { o[String(i.id)] = JSON.stringify(i); });
+  if (t === 'venc') vencimientos.forEach(v => { o[String(v.id)] = JSON.stringify(v); });
+  if (t === 'term') Object.keys(terminadas).forEach(k => {
+    const [zona, gondola] = k.split('|');
+    o[k] = JSON.stringify(Object.assign({ key: k, zona, gondola }, terminadas[k]));
+  });
+  return o;
+}
+// Compara el estado local con el último conocido y encola las diferencias
+function syncDiff() {
+  if (!syncActivo()) return;
+  // Productos viejos sin ID (versiones anteriores): asignarles uno
+  let sinId = false;
+  const vistos = new Set();
+  inventory.forEach(i => { if (i.id == null || vistos.has(String(i.id))) { i.id = nuevoId(); sinId = true; } vistos.add(String(i.id)); });
+  if (sinId) localStorage.setItem('mm_inv', JSON.stringify(inventory));
+  if (!syncShadow) syncShadow = { inv: {}, term: {}, venc: {}, reglas: null };
+  ['inv', 'term', 'venc'].forEach(t => {
+    const snap = syncSnap(t), sh = syncShadow[t];
+    Object.keys(snap).forEach(id => {
+      if (sh[id] === snap[id]) return;
+      const nuevo = JSON.parse(snap[id]);
+      const op = { t, id, op: 'upsert', data: nuevo };
+      if (sh[id] === undefined) op.abs = true;
+      else if (t !== 'term') {
+        const viejo = JSON.parse(sh[id]);
+        op.dq = redondear((Number(nuevo.qty) || 0) - (Number(viejo.qty) || 0));
+        if (t === 'venc') op.dv = redondear((Number(nuevo.vendidas) || 0) - (Number(viejo.vendidas) || 0));
+      }
+      syncCola.push(op);
+      sh[id] = snap[id];
+    });
+    Object.keys(sh).forEach(id => { if (!(id in snap)) { syncCola.push({ t, id, op: 'delete' }); delete sh[id]; } });
+  });
+  const reglasGuardadas = localStorage.getItem('mm_venc_reglas');   // solo lo guardado, no lo que se está editando
+  if (reglasGuardadas && reglasGuardadas !== syncShadow.reglas) {
+    syncCola.push({ t: 'reglas', data: JSON.parse(reglasGuardadas) });
+    syncShadow.reglas = reglasGuardadas;
+  }
+  syncGuardarEstado();
+}
+function syncCambio() {
+  if (!syncActivo()) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => { syncDiff(); syncPintar(); syncCiclo(); }, 1500);
+}
+async function syncFetch(url, opts) {
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 45000);
+  try {
+    const r = await fetch(url, Object.assign({ signal: ctrl.signal, redirect: 'follow' }, opts || {}));
+    const j = await r.json();
+    if (!j || j.ok === false) throw new Error((j && j.error) || 'Respuesta inválida del script');
+    return j;
+  } finally { clearTimeout(to); }
+}
+function syncGet(params) { return syncFetch(`${sheetsUrl}?${new URLSearchParams(params).toString()}`); }
+function syncPost(body) {
+  return syncFetch(sheetsUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
+}
+async function syncCiclo(forzar) {
+  if (!syncActivo() || syncEnCurso) return;
+  if (!navigator.onLine) { syncEstado.ok = false; syncEstado.error = 'Sin internet'; syncPintar(); return; }
+  syncEnCurso = true; syncPintar();
+  try {
+    syncDiff();
+    // 1. Enviar lo pendiente
+    while (syncCola.length) {
+      const lote = syncCola.slice(0, 400);
+      const reglas = lote.filter(o => o.t === 'reglas').pop();
+      const body = { accion: 'push', dispositivo: operator.name, ops: lote.filter(o => o.t !== 'reglas') };
+      if (reglas) body.reglas = reglas.data;
+      await syncPost(body);
+      syncCola.splice(0, lote.length);
+      syncGuardarEstado();
+    }
+    // 2. Recibir lo que cambiaron los demás (con 2 min de margen; aplicar es idempotente)
+    const r = await syncGet({ accion: 'sync', desde: Math.max(0, syncDesde - 120000) });
+    syncAplicarRemoto(r);
+    syncDesde = r.ahora; syncGuardarEstado();
+    // 3. Maestro compartido
+    if (maestro.length && (syncSubirMaestro || !r.maestroVer)) await syncSubirMaestroAhora();
+    else if (r.maestroVer && r.maestroVer !== syncMaestroVer) await syncBajarMaestro();
+    syncEstado = { ok: true, ultimo: Date.now(), error: '' };
+  } catch (e) {
+    console.warn('Sync:', e);
+    syncEstado.ok = false;
+    syncEstado.error = e && e.name === 'AbortError' ? 'Tiempo de espera agotado' : String(e && e.message || e).slice(0, 80);
+  } finally {
+    syncEnCurso = false;
+    syncPintar();
+  }
+}
+function syncAplicarRemoto(r) {
+  syncDiff();                       // capturar lo que se cargó mientras se esperaba la respuesta
+  if (!syncShadow) return;
+  let cambios = false;
+  ['inv', 'term', 'venc'].forEach(t => {
+    (r[t] || []).forEach(rec => {
+      const id = String(rec.id);
+      let data = rec.del ? null : rec.data;
+      // Reaplicar encima lo que este celular todavía no envió
+      syncCola.filter(o => o.t === t && String(o.id) === id).forEach(o => {
+        if (o.op === 'delete') data = null;
+        else if (o.abs || !data) data = Object.assign({}, o.data);
+        else {
+          const d = Object.assign({}, o.data);
+          if (o.dq !== undefined) d.qty = redondear((Number(data.qty) || 0) + o.dq);
+          if (o.dv !== undefined) d.vendidas = redondear((Number(data.vendidas) || 0) + o.dv);
+          data = d;
+        }
+      });
+      const nuevoStr = data ? JSON.stringify(t === 'term' ? Object.assign({ key: id, zona: id.split('|')[0], gondola: id.split('|')[1] }, data) : data) : undefined;
+      if (syncShadow[t][id] === nuevoStr) return;
+      cambios = true;
+      if (nuevoStr === undefined) delete syncShadow[t][id]; else syncShadow[t][id] = nuevoStr;
+      if (t === 'term') {
+        if (data) terminadas[id] = JSON.parse(nuevoStr); else delete terminadas[id];
+        return;
+      }
+      const lista = t === 'inv' ? inventory : vencimientos;
+      const i = lista.findIndex(x => String(x.id) === id);
+      if (!data) { if (i >= 0) lista.splice(i, 1); return; }
+      if (i >= 0) {                  // actualizar el mismo objeto (puede estar abierto en pantalla)
+        const obj = lista[i];
+        Object.keys(obj).forEach(k => { if (!(k in data)) delete obj[k]; });
+        Object.assign(obj, data);
+      } else lista.push(data);
+    });
+  });
+  if (r.reglas && !syncCola.some(o => o.t === 'reglas')) {
+    const str = JSON.stringify(r.reglas);
+    if (str !== localStorage.getItem('mm_venc_reglas')) {
+      vencReglas = r.reglas;
+      localStorage.setItem('mm_venc_reglas', str);
+      cambios = true;
+    }
+    syncShadow.reglas = str;
+  }
+  syncGuardarEstado();
+  if (cambios) {
+    localStorage.setItem('mm_inv', JSON.stringify(inventory));
+    localStorage.setItem('mm_venc', JSON.stringify(vencimientos));
+    localStorage.setItem('mm_terminadas', JSON.stringify(terminadas));
+    refreshAll();
+    if (document.getElementById('tab-venc').classList.contains('active')) renderReglasVenc();
+  }
+}
+function guardarMaestroLocal(lista) {
+  maestro = lista;
+  try {
+    const js = JSON.stringify(lista);
+    if (js.length > 4 * 1024 * 1024) {
+      localStorage.setItem('mm_maestro_compact', JSON.stringify(lista.map(m => ({ b: m.barcode || '', b2: m.barcode2 || '', n: m.name, c: m.cat || '', q: m.qty || 0, p: m.price || 0, k: m.cost || 0 }))));
+      localStorage.removeItem('mm_maestro');
+    } else {
+      localStorage.setItem('mm_maestro', js);
+      localStorage.removeItem('mm_maestro_compact');
+    }
+  } catch (e) { console.warn('Maestro solo en memoria:', e); }
+}
+async function syncSubirMaestroAhora() {
+  const items = maestro.map(m => ({ barcode: m.barcode || '', barcode2: m.barcode2 || '', name: m.name || '', cat: m.cat || m.rubro || '', qty: m.qty || 0, price: m.price || 0, cost: m.cost || 0 }));
+  const r = await syncPost({ accion: 'maestro', items });
+  syncMaestroVer = r.maestroVer; localStorage.setItem('mm_maestro_ver', String(syncMaestroVer));
+  syncSubirMaestro = false; localStorage.removeItem('mm_maestro_subir');
+  addAudit('system', `🔄 Maestro compartido con los demás celulares (${items.length} productos)`, null);
+  renderAudit();
+}
+async function syncBajarMaestro() {
+  const r = await syncGet({ accion: 'maestro' });
+  const lista = (r.items || []).map(a => ({ barcode: a[0], barcode2: a[1], name: a[2], cat: a[3], rubro: a[3], qty: a[4], price: a[5], cost: a[6] }));
+  guardarMaestroLocal(lista);
+  syncMaestroVer = r.maestroVer; localStorage.setItem('mm_maestro_ver', String(syncMaestroVer));
+  addAudit('system', `🔄 Maestro recibido de otro celular (${lista.length} productos)`, null);
+  refreshAll();
+  showToast(`📋 Maestro actualizado: ${lista.length} productos`);
+}
+function syncPintar() {
+  const el = document.getElementById('sync-chip');
+  if (!el) return;
+  let txt, cls;
+  if (!sheetsUrl) { txt = '⚪ Solo este celular'; cls = ''; }
+  else if (syncEnCurso) { txt = '🔄 Sincronizando…'; cls = 'pend'; }
+  else if (syncEstado.ok === false) { txt = syncCola.length ? `🔴 ${syncCola.length} sin enviar` : '🔴 Sin conexión'; cls = 'err'; }
+  else if (syncCola.length) { txt = `🟠 ${syncCola.length} por enviar`; cls = 'pend'; }
+  else if (syncEstado.ultimo) {
+    const s = Math.round((Date.now() - syncEstado.ultimo) / 1000);
+    txt = `🟢 Sincronizado${s < 60 ? '' : ' hace ' + Math.round(s / 60) + ' min'}`; cls = 'ok';
+  } else { txt = '🔄 Conectando…'; cls = 'pend'; }
+  el.textContent = txt;
+  el.className = 'sync-chip ' + cls;
+  el.title = syncEstado.error || '';
+}
+function irASync() {
+  if (puedeExportar()) {
+    switchTab('export', document.querySelectorAll('.tab')[4]);
+    const panel = document.getElementById('sheets-panel');
+    if (panel.style.display === 'none') showSheetsPanel();
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  if (sheetsUrl) { syncCiclo(true); showToast(syncEstado.error ? '❌ ' + syncEstado.error : '🔄 Sincronizando…'); return; }
+  const u = prompt('Pegá la URL de la planilla compartida (te la pasa el encargado):', '');
+  if (u === null) return;
+  document.getElementById('sheets-url').value = u.trim();
+  saveSheetUrl();
+}
+function copiarEnlaceSync() {
+  if (!sheetsUrl) { showToast('⚠️ Primero guardá la URL', 'warn'); return; }
+  const link = location.origin + location.pathname + '?sync=' + encodeURIComponent(sheetsUrl);
+  (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(
+    () => showToast('📲 Enlace copiado — mandalo por WhatsApp a los otros celulares'),
+    () => prompt('Copiá este enlace y mandalo a los otros celulares:', link));
+}
+setInterval(() => { syncCiclo(); }, 20000);
+setInterval(syncPintar, 5000);
+window.addEventListener('online', () => syncCiclo());
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncCiclo(); });
+syncPintar();
+setTimeout(() => syncCiclo(), 1500);
 </script>
 </body>
 </html>

@@ -18,6 +18,14 @@ App para contar el inventario con el celular (`inventario-scanner.html`).
 - Recepción B1–B7 y Mesa de trabajo T1–T11, como en los planos.
 - Aviso de conteo sin exportar, copia de seguridad, restaurar y recuperar lo último borrado.
 
+## Compartir entre celulares (noviembre 2026)
+- Google Sheets es el lugar central: `apps-script-sync.gs` (también se copia desde la app) crea las hojas MAESTRO, CONTEO, TERMINADAS, VENCIMIENTOS y CONFIG.
+- Cada celular envía sus cambios y recibe los de los demás cada 20 segundos. Las cantidades viajan como diferencia, así dos celulares contando el mismo producto a la vez no se pisan.
+- El maestro se importa en un celular y les llega a los demás. Sin internet, los cambios quedan pendientes y se envían al volver.
+- Indicador arriba a la derecha: 🟢 sincronizado · 🟠 por enviar · 🔴 sin conexión.
+- Configurar otros celulares: 📡 Google Sheets → 📲 Copiar enlace (abre la app con `?sync=URL`).
+- "Borrar inventario" con celulares conectados borra el conteo en todos.
+
 ## Plano interactivo de ubicación (noviembre 2026)
 - En **📍 Ubicación actual de conteo** se elige la góndola tocándola en el plano (Tienda, Depósito interno, Depósito exterior, Recepción y mesa de trabajo).
 - Muestra el nombre del sector y el responsable (rojo: repositor · amarillo: cajera) y marca con ✓ las góndolas ya contadas.
@@ -35,4 +43,3 @@ App para contar el inventario con el celular (`inventario-scanner.html`).
 - Cualquier usuario puede **descontar unidades vendidas** de un lote; si llega a 0 se cierra como *Vendido*. En el control rápido, si el lote ya existe se escribe lo que **queda** en góndola y la diferencia se cuenta como vendida.
 - Gerente, Dueño/a, Supervisor/a y Encargado/a marcan qué se hizo con cada lote (rebajado, al frente, devuelto, merma) y configuran los días de alerta por rubro (ej. `PERECIBLES - LACTEOS` = 15) o por producto (0 = no pedir fecha).
 - Los datos de vencimientos se guardan aparte (`mm_venc`, `mm_venc_reglas`): borrar el inventario no los borra. Entran en la copia de seguridad.
-- Google Sheets: agregar `apps-script-vencimientos.gs` al Apps Script para tener la hoja **VENCIMIENTOS**.
