@@ -349,6 +349,20 @@
   .venc-acc-btn:hover { border-color: var(--verde); color: var(--verde); }
   .venc-regla { display: grid; grid-template-columns: 1fr 70px 36px; gap: 6px; align-items: center; margin-bottom: 6px; }
   .venc-regla input { padding: 8px 10px; font-size: 13px; }
+  .venc-grupo { border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; background: var(--card2); overflow: hidden; }
+  .venc-grupo.apagado { opacity: 0.55; }
+  .venc-grupo-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
+  .venc-grupo-tog { flex: 1; text-align: left; background: transparent; border: 0; color: var(--text); font-family: var(--font); font-size: 14px; font-weight: 800; cursor: pointer; padding: 4px 0; min-height: 40px; }
+  .venc-grupo-tog small { display: block; font-size: 10px; font-weight: 600; color: var(--muted); margin-top: 2px; }
+  .venc-switch { display: flex !important; align-items: center; gap: 6px; margin: 0 !important; font-size: 12px !important; font-weight: 700; color: var(--text) !important; text-transform: none !important; letter-spacing: 0 !important; white-space: nowrap; cursor: pointer; }
+  .venc-switch input { -webkit-appearance: checkbox; appearance: auto; width: 22px !important; height: 22px; min-height: 0; padding: 0 !important; margin: 0; border: 0; background: none; accent-color: var(--verde); flex: 0 0 auto; }
+  .venc-grupo-base { display: flex; align-items: center; gap: 8px; padding: 0 12px 10px; font-size: 12px; color: var(--text); }
+  .venc-grupo-base span { flex: 1; }
+  .venc-grupo-base input, .venc-sub input { width: 76px; flex: 0 0 76px; padding: 8px 10px; font-size: 13px; }
+  .venc-subs { border-top: 1px solid var(--border); padding: 6px 12px 10px; }
+  .venc-sub { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 12px; }
+  .venc-sub span { flex: 1; min-width: 0; }
+  .venc-sub small { color: var(--muted); }
   .venc-del { background: transparent; border: 1px solid rgba(211,47,47,0.4); color: var(--rojo); border-radius: 8px; height: 36px; cursor: pointer; font-weight: 800; }
 </style>
 </head>
@@ -1056,6 +1070,9 @@
       <span>🔍</span>
       <input id="venc-buscar" type="text" placeholder="Buscar producto o código..." oninput="renderVencimientos()">
     </div>
+    <select id="venc-grupo" onchange="renderVencimientos()" style="width:100%;margin:-4px 0 12px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:10px 12px;font-size:13px;font-family:var(--font);">
+      <option value="">Todas las categorías</option>
+    </select>
 
     <div class="items-list" id="venc-lista"></div>
 
@@ -1104,10 +1121,14 @@
     <!-- Configuración (Gerente / Dueño / Supervisor / Encargado) -->
     <div class="input-card" id="venc-config" style="display:none">
       <h3>⚙️ Días de alerta</h3>
-      <div style="font-size:11px;color:var(--muted);margin:-8px 0 12px;line-height:1.5;">Si faltan estos días o menos para vencer, la app avisa y guarda el lote. La categoría se compara por el comienzo del rubro: <b style="color:var(--text)">PERECIBLES - LACTEOS</b> incluye todos los lácteos. Gana la regla más específica.</div>
-      <div style="font-size:11px;font-weight:800;color:var(--amarillo);margin-bottom:6px;">POR CATEGORÍA / RUBRO</div>
+      <div style="font-size:11px;color:var(--muted);margin:-8px 0 12px;line-height:1.5;">Si faltan estos días o menos para vencer, la app avisa y guarda el lote. Cada categoría tiene días para todo el grupo; tocala para ver sus subcategorías y cambiar alguna en particular (vacío = usa los días del grupo, 0 = no pide fecha).</div>
+      <div style="font-size:11px;font-weight:800;color:var(--amarillo);margin-bottom:6px;">CATEGORÍAS QUE SE CONTROLAN</div>
       <div id="venc-reglas-cat"></div>
-      <button class="btn btn-secondary" onclick="agregarReglaVenc('cats')" style="width:100%;font-size:12px;padding:9px;margin-bottom:14px;">➕ Agregar categoría</button>
+      <div style="display:flex;gap:6px;margin:4px 0 14px;">
+        <input id="venc-nueva-cat" type="text" list="venc-cat-datalist" placeholder="Agregar categoría o subcategoría" style="flex:1;padding:9px 10px;font-size:12px;">
+        <input id="venc-nueva-dias" type="number" min="0" inputmode="numeric" placeholder="Días" style="width:64px;padding:9px 8px;font-size:12px;">
+        <button class="btn btn-secondary" onclick="agregarCategoriaVenc()" style="flex:0 0 auto;padding:9px 12px;font-size:12px;">➕</button>
+      </div>
       <div style="font-size:11px;font-weight:800;color:var(--amarillo);margin-bottom:6px;">EXCEPCIONES POR PRODUCTO (código de barras)</div>
       <div id="venc-reglas-prod"></div>
       <button class="btn btn-secondary" onclick="agregarReglaVenc('prods')" style="width:100%;font-size:12px;padding:9px;margin-bottom:14px;">➕ Agregar producto</button>
@@ -1207,6 +1228,24 @@ const VENC_REGLAS_RECOMENDADAS = [
   { pref: 'MASCOTAS - RACIONES Y ALIMENTOS', dias: 60 },
   { pref: 'PERFUMERIA E HIGIENE - FARMACIA', dias: 90 }
 ];
+// Categorías principales (agrupan subcategorías). Orden: de más a menos perecedero
+const GRUPOS_VENC = {
+  'LACTEOS REFRIGERADOS':  '🥛 Lácteos',
+  'FIAMBRERIA CARNICERIA': '🥩 Fiambrería y carnicería',
+  'PANADERIA':             '🍞 Panadería',
+  'CONGELADOS HELADOS':    '🧊 Congelados y helados',
+  'BEBIDAS':               '🥤 Bebidas',
+  'BODEGA':                '🍺 Bodega',
+  'KIOSKOS GOLOSINAS':     '🍫 Kiosco y golosinas',
+  'ALMACEN':               '🥫 Almacén',
+  'MASCOTAS':              '🐾 Mascotas',
+  'PERFUMERIA E HIGIENE':  '💊 Farmacia e higiene'
+};
+function grupoDe(cat) { return String(cat || '').toUpperCase().replace(/\s+/g, ' ').trim().split(' - ')[0] || ''; }
+function nombreGrupo(g) {
+  if (GRUPOS_VENC[g]) return GRUPOS_VENC[g];
+  return g ? g.charAt(0) + g.slice(1).toLowerCase() : 'Sin categoría';
+}
 function reglasRecomendadas() { return { cats: VENC_REGLAS_RECOMENDADAS.map(r => Object.assign({}, r)), prods: [] }; }
 let vencReglas = JSON.parse(localStorage.getItem('mm_venc_reglas') || 'null');
 // Si nunca se configuró, o quedó la configuración de ejemplo vieja (PERECIBLES...), usar las recomendadas
@@ -3514,6 +3553,7 @@ function reglaVencDe(item) {
   if (p) return { dias: parseInt(p.dias) || 0, origen: 'producto' };
   const cat = normCat(catDe(item));
   if (!cat) return { dias: 0, origen: '' };
+  if ((vencReglas.off || []).includes(grupoDe(cat))) return { dias: 0, origen: 'grupo apagado' };
   let mejor = null;
   (vencReglas.cats || []).forEach(r => {
     const pr = normCat(r.pref);
@@ -3829,6 +3869,17 @@ function renderVencimientos() {
   const q = (document.getElementById('venc-buscar').value || '').trim().toLowerCase();
   let rows = all.filter(x => vencFiltro === 'todos' || (vencFiltro === 'pendientes' ? x.g !== 'resueltos' : x.g === vencFiltro));
   if (q) rows = rows.filter(x => [x.v.name, x.v.barcode, x.v.barcode2, x.v.cat].some(s => String(s || '').toLowerCase().includes(q)));
+  const selG = document.getElementById('venc-grupo');
+  if (selG) {
+    const prev = selG.value;
+    const gs = [...new Set(all.map(x => grupoDe(x.v.cat)).filter(Boolean))].sort((a, b) => nombreGrupo(a).localeCompare(nombreGrupo(b)));
+    selG.innerHTML = '<option value="">Todas las categorías</option>' + gs.map(g => {
+      const n = all.filter(x => grupoDe(x.v.cat) === g && x.g !== 'resueltos').length;
+      return `<option value="${escHtml(g)}">${escHtml(nombreGrupo(g))}${n ? ` (${n})` : ''}</option>`;
+    }).join('');
+    selG.value = gs.includes(prev) ? prev : '';
+    if (selG.value) rows = rows.filter(x => grupoDe(x.v.cat) === selG.value);
+  }
   rows.sort((a, b) => {
     const ra = a.g === 'resueltos', rb = b.g === 'resueltos';
     if (ra !== rb) return ra ? 1 : -1;
@@ -3956,16 +4007,55 @@ function limpiarVencResueltos() {
   showToast(`🧹 ${n} lotes resueltos borrados`);
 }
 
-// ── Configuración de días de alerta ──
+// ── Configuración de días de alerta (agrupada por categoría principal) ──
+let vencGruposAbiertos = new Set();
+function diasEfectivos(cat, cats) {
+  const c = normCat(cat); let mejor = null;
+  cats.forEach(r => { const pr = normCat(r.pref); if (pr && c.startsWith(pr) && (!mejor || pr.length > normCat(mejor.pref).length)) mejor = r; });
+  return mejor ? (parseInt(mejor.dias) || 0) : 0;
+}
 function renderReglasVenc() {
   const cont = document.getElementById('venc-reglas-cat');
   if (!cont) return;
-  cont.innerHTML = (vencReglas.cats || []).map((r, i) => ({ r, i })).sort((a, b) => normCat(a.r.pref).localeCompare(normCat(b.r.pref))).map(({ r, i }) => `
-    <div class="venc-regla">
-      <input type="text" list="venc-cat-datalist" placeholder="Ej: PERECIBLES - LACTEOS" value="${escHtml(r.pref)}" data-k="cats" data-i="${i}" data-f="pref" aria-label="Categoría">
-      <input type="number" min="0" inputmode="numeric" value="${escHtml(r.dias)}" data-k="cats" data-i="${i}" data-f="dias" aria-label="Días de alerta">
-      <button class="venc-del" onclick="quitarReglaVenc('cats',${i})" aria-label="Quitar">✕</button>
-    </div>`).join('') || '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Sin categorías: no se pide fecha a ningún producto.</div>';
+  const cats = vencReglas.cats || [];
+  const off = vencReglas.off || [];
+  const regla = pref => cats.find(r => normCat(r.pref) === pref);
+  // Rubros del maestro agrupados
+  const rubros = {};
+  maestro.forEach(m => { const c = normCat(m.cat || m.rubro); if (c) rubros[c] = (rubros[c] || 0) + 1; });
+  const orden = Object.keys(GRUPOS_VENC);
+  const grupos = [...new Set(cats.map(r => grupoDe(r.pref)).filter(Boolean))]
+    .sort((a, b) => (orden.indexOf(a) + 1 || 99) - (orden.indexOf(b) + 1 || 99) || a.localeCompare(b));
+  cont.innerHTML = grupos.map(g => {
+    const on = !off.includes(g);
+    const abierto = vencGruposAbiertos.has(g);
+    const base = regla(g);
+    const subs = new Set();
+    cats.forEach(r => { const pr = normCat(r.pref); if (pr.startsWith(g + ' - ')) subs.add(pr); });
+    Object.keys(rubros).forEach(c => { if (c.startsWith(g + ' - ')) subs.add(c); });
+    const subsArr = [...subs].sort();
+    const prodsGrupo = Object.keys(rubros).filter(c => c === g || c.startsWith(g + ' - '));
+    const nProd = prodsGrupo.reduce((a, c) => a + rubros[c], 0);
+    const nCtrl = prodsGrupo.filter(c => diasEfectivos(c, cats) > 0).reduce((a, c) => a + rubros[c], 0);
+    const resumen = maestro.length ? `${nCtrl} de ${nProd} productos piden fecha · ${subsArr.length} subcategorías` : `${subsArr.length} subcategorías`;
+    const ge = escHtml(g);
+    return `<div class="venc-grupo ${on ? '' : 'apagado'}">
+      <div class="venc-grupo-head">
+        <button type="button" class="venc-grupo-tog" onclick="toggleGrupoVenc('${ge}')">${abierto ? '▾' : '▸'} ${escHtml(nombreGrupo(g))}<small>${resumen}</small></button>
+        <label class="venc-switch"><input type="checkbox" data-grupo-on="${ge}" ${on ? 'checked' : ''} onchange="this.closest('.venc-grupo').classList.toggle('apagado', !this.checked)">Controlar</label>
+      </div>
+      <div class="venc-grupo-base"><span>Días para todo el grupo</span>
+        <input type="number" min="0" inputmode="numeric" data-pref="${ge}" value="${base ? escHtml(base.dias) : ''}" placeholder="0" aria-label="Días de alerta ${ge}">
+      </div>
+      ${abierto ? `<div class="venc-subs">${subsArr.map(c => {
+        const r = regla(c);
+        const hereda = diasEfectivos(c, cats.filter(x => normCat(x.pref) !== c));
+        const n = Object.keys(rubros).filter(k => k === c || k.startsWith(c + ' - ')).reduce((a, k) => a + rubros[k], 0);
+        return `<div class="venc-sub"><span>${escHtml(c.slice(g.length + 3))}${n ? ` <small>· ${n}</small>` : ''}</span>
+          <input type="number" min="0" inputmode="numeric" data-pref="${escHtml(c)}" value="${r ? escHtml(r.dias) : ''}" placeholder="${hereda}" aria-label="Días ${escHtml(c)}"></div>`;
+      }).join('') || '<div style="font-size:11px;color:var(--muted)">Sin subcategorías en el maestro</div>'}</div>` : ''}
+    </div>`;
+  }).join('') || '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Sin categorías: no se pide fecha a ningún producto.</div>';
   document.getElementById('venc-reglas-prod').innerHTML = (vencReglas.prods || []).map((r, i) => {
     const m = r.codigo ? buscarMaestro(r.codigo) : null;
     return `
@@ -3975,7 +4065,7 @@ function renderReglasVenc() {
       <button class="venc-del" onclick="quitarReglaVenc('prods',${i})" aria-label="Quitar">✕</button>
     </div>${m ? `<div style="font-size:10px;color:var(--muted);margin:0 0 8px 2px">${escHtml(m.name)}</div>` : ''}`;
   }).join('') || '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Sin excepciones. Usá 0 días para que un producto no pida fecha.</div>';
-  // Sugerencias: rubros del maestro y sus niveles (PERECIBLES, PERECIBLES - LACTEOS, ...)
+  // Sugerencias: rubros del maestro y sus niveles
   const set = new Set();
   [...maestro, ...inventory].forEach(x => {
     const partes = normCat(x.cat || x.rubro).split(' - ').filter(Boolean);
@@ -3983,24 +4073,59 @@ function renderReglasVenc() {
   });
   document.getElementById('venc-cat-datalist').innerHTML = [...set].sort().slice(0, 400).map(c => `<option value="${escHtml(c)}">`).join('');
 }
+// Lee lo que está escrito en pantalla (sin guardar todavía)
 function leerReglasVenc() {
-  const r = { cats: (vencReglas.cats || []).map(x => Object.assign({}, x)), prods: (vencReglas.prods || []).map(x => Object.assign({}, x)) };
-  document.querySelectorAll('#venc-config [data-k]').forEach(el => {
-    const fila = r[el.dataset.k][+el.dataset.i];
+  let cats = (vencReglas.cats || []).map(x => Object.assign({}, x));
+  document.querySelectorAll('#venc-config [data-pref]').forEach(el => {
+    const pref = normCat(el.dataset.pref);
+    const v = String(el.value).trim();
+    cats = cats.filter(r => normCat(r.pref) !== pref);
+    if (v !== '') cats.push({ pref, dias: Math.max(0, parseInt(v) || 0) });
+  });
+  let off = [...(vencReglas.off || [])];
+  document.querySelectorAll('#venc-config [data-grupo-on]').forEach(el => {
+    const g = el.dataset.grupoOn;
+    off = off.filter(x => x !== g);
+    if (!el.checked) off.push(g);
+  });
+  const prods = (vencReglas.prods || []).map(x => Object.assign({}, x));
+  document.querySelectorAll('#venc-config [data-k="prods"]').forEach(el => {
+    const fila = prods[+el.dataset.i];
     if (fila) fila[el.dataset.f] = el.dataset.f === 'dias' ? (parseInt(el.value) || 0) : el.value.trim();
   });
-  return r;
+  return { cats, prods, off };
+}
+function toggleGrupoVenc(g) {
+  vencReglas = leerReglasVenc();
+  vencGruposAbiertos.has(g) ? vencGruposAbiertos.delete(g) : vencGruposAbiertos.add(g);
+  renderReglasVenc();
+}
+function agregarCategoriaVenc() {
+  const pref = normCat(document.getElementById('venc-nueva-cat').value);
+  const d = String(document.getElementById('venc-nueva-dias').value).trim();
+  if (!pref) { showToast('⚠️ Escribí la categoría (podés elegirla de la lista)', 'warn'); return; }
+  if (d === '') { showToast('⚠️ Poné los días de alerta', 'warn'); return; }
+  vencReglas = leerReglasVenc();
+  vencReglas.cats = vencReglas.cats.filter(r => normCat(r.pref) !== pref);
+  vencReglas.cats.push({ pref, dias: Math.max(0, parseInt(d) || 0) });
+  const g = grupoDe(pref);
+  vencReglas.off = (vencReglas.off || []).filter(x => x !== g);
+  if (pref !== g) vencGruposAbiertos.add(g);
+  document.getElementById('venc-nueva-cat').value = '';
+  document.getElementById('venc-nueva-dias').value = '';
+  renderReglasVenc();
+  showToast(`➕ ${pref}: ${d} días — tocá Guardar para confirmar`, 'warn');
 }
 function agregarReglaVenc(k) {
   vencReglas = leerReglasVenc();
-  vencReglas[k].push(k === 'cats' ? { pref: '', dias: 7 } : { codigo: '', dias: 10 });
+  vencReglas.prods.push({ codigo: '', dias: 10 });
   renderReglasVenc();
-  const nuevo = document.querySelector(`#venc-config [data-k="${k}"][data-i="${vencReglas[k].length - 1}"]`);
+  const nuevo = document.querySelector(`#venc-config [data-k="prods"][data-i="${vencReglas.prods.length - 1}"]`);
   if (nuevo) { nuevo.focus(); nuevo.scrollIntoView({ block: 'center' }); }
 }
 function quitarReglaVenc(k, i) {
   vencReglas = leerReglasVenc();
-  vencReglas[k].splice(i, 1);
+  vencReglas.prods.splice(i, 1);
   renderReglasVenc();
 }
 function cargarReglasRecomendadas() {
@@ -4008,16 +4133,18 @@ function cargarReglasRecomendadas() {
   const prods = leerReglasVenc().prods;
   vencReglas = reglasRecomendadas();
   vencReglas.prods = prods;
+  vencReglas.off = [];
   renderReglasVenc();
   showToast('📋 Días recomendados cargados — tocá Guardar para confirmar', 'warn');
 }
 function guardarReglasVenc() {
   const r = leerReglasVenc();
   r.cats  = r.cats.filter(x => normCat(x.pref)).map(x => ({ pref: normCat(x.pref), dias: Math.max(0, parseInt(x.dias) || 0) }));
+  r.off   = [...new Set(r.off || [])];
   r.prods = r.prods.filter(x => normCod(x.codigo)).map(x => ({ codigo: normCod(x.codigo), dias: Math.max(0, parseInt(x.dias) || 0) }));
   vencReglas = r;
   localStorage.setItem('mm_venc_reglas', JSON.stringify(vencReglas));
-  addAudit('system', `⏰ Días de alerta actualizados (${r.cats.length} categorías, ${r.prods.length} productos)`, null);
+  addAudit('system', `⏰ Días de alerta actualizados (${r.cats.length} reglas${r.off.length ? ', sin controlar: ' + r.off.map(nombreGrupo).join(', ') : ''}, ${r.prods.length} productos)`, null);
   renderReglasVenc(); renderVencimientos(); renderAudit();
   showToast('✅ Configuración guardada');
 }
