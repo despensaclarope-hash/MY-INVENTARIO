@@ -1112,6 +1112,7 @@
       <div id="venc-reglas-prod"></div>
       <button class="btn btn-secondary" onclick="agregarReglaVenc('prods')" style="width:100%;font-size:12px;padding:9px;margin-bottom:14px;">➕ Agregar producto</button>
       <datalist id="venc-cat-datalist"></datalist>
+      <button class="btn btn-secondary" onclick="cargarReglasRecomendadas()" style="width:100%;font-size:12px;padding:9px;margin-bottom:8px;">📋 Volver a los días recomendados</button>
       <button class="btn btn-primary" onclick="guardarReglasVenc()" style="width:100%;">💾 Guardar configuración</button>
     </div>
 
@@ -1141,10 +1142,78 @@ let scanning   = false;
 let currentFilter = '';
 // ⏰ Vencimientos: datos propios, separados del conteo (no se borran con "Borrar inventario")
 let vencimientos = JSON.parse(localStorage.getItem('mm_venc') || '[]');
-let vencReglas   = JSON.parse(localStorage.getItem('mm_venc_reglas') || 'null') || {
-  cats:  [{ pref: 'PERECIBLES - LACTEOS', dias: 15 }, { pref: 'PERECIBLES', dias: 7 }],
-  prods: []
-};
+// Días de alerta recomendados según los rubros del maestro (gana la regla más específica; 0 = no pide fecha)
+const VENC_REGLAS_RECOMENDADAS = [
+  // Lácteos refrigerados
+  { pref: 'LACTEOS REFRIGERADOS', dias: 10 },
+  { pref: 'LACTEOS REFRIGERADOS - LECHES', dias: 5 },
+  { pref: 'LACTEOS REFRIGERADOS - YOGURES', dias: 15 },
+  { pref: 'LACTEOS REFRIGERADOS - POSTRES LACTEOS', dias: 10 },
+  { pref: 'LACTEOS REFRIGERADOS - CHOCOLATADAS', dias: 7 },
+  { pref: 'LACTEOS REFRIGERADOS - CREMAS', dias: 7 },
+  { pref: 'LACTEOS REFRIGERADOS - MANTECAS', dias: 15 },
+  { pref: 'LACTEOS REFRIGERADOS - QUESOS - UNTABLES', dias: 10 },
+  { pref: 'LACTEOS REFRIGERADOS - QUESOS - QUESOS MESA', dias: 15 },
+  // Fiambrería y carnicería
+  { pref: 'FIAMBRERIA CARNICERIA', dias: 5 },
+  { pref: 'FIAMBRERIA CARNICERIA - CARNICERIA', dias: 2 },
+  { pref: 'FIAMBRERIA CARNICERIA - FRIOS - SALCHICHAS', dias: 7 },
+  // Panadería
+  { pref: 'PANADERIA', dias: 2 },
+  { pref: 'PANADERIA - PANADERIA INTERNA', dias: 1 },
+  { pref: 'PANADERIA - PANIFICADOS ESTACIONALES', dias: 30 },
+  { pref: 'PANADERIA - INSUMOS DE PANIFICACION', dias: 7 },
+  // Congelados y helados
+  { pref: 'CONGELADOS HELADOS', dias: 30 },
+  // Kiosco y golosinas
+  { pref: 'KIOSKOS GOLOSINAS', dias: 45 },
+  { pref: 'KIOSKOS GOLOSINAS - BOMBONERIA - ALFAJORES', dias: 30 },
+  { pref: 'KIOSKOS GOLOSINAS - BOMBONERIA - BARRAS CEREAL', dias: 30 },
+  { pref: 'KIOSKOS GOLOSINAS - BUDINES', dias: 15 },
+  { pref: 'KIOSKOS GOLOSINAS - GALLETASDULCES', dias: 30 },
+  { pref: 'KIOSKOS GOLOSINAS - GALLETASSALADAS', dias: 30 },
+  { pref: 'KIOSKOS GOLOSINAS - SALADITOS', dias: 20 },
+  { pref: 'KIOSKOS GOLOSINAS - DULCES FRACCIONADOS', dias: 10 },
+  { pref: 'KIOSKOS GOLOSINAS - DULCES', dias: 30 },
+  { pref: 'KIOSKOS GOLOSINAS - DESAYUNO Y MERIENDA - MCEREALES', dias: 30 },
+  { pref: 'KIOSKOS GOLOSINAS - DESAYUNO Y MERIENDA - INFUSIONES', dias: 60 },
+  { pref: 'KIOSKOS GOLOSINAS - LINEADIET', dias: 60 },
+  { pref: 'KIOSKOS GOLOSINAS - COMODINES DE CAJA', dias: 0 },
+  // Bebidas y bodega
+  { pref: 'BEBIDAS', dias: 30 },
+  { pref: 'BEBIDAS - HIELO', dias: 0 },
+  { pref: 'BEBIDAS - ENVASE RETORNABLE DEPOSITO', dias: 0 },
+  { pref: 'BEBIDAS - JUGOS EN POLVO', dias: 45 },
+  { pref: 'BODEGA - CERVEZA', dias: 30 },
+  { pref: 'BODEGA - SIDRAS', dias: 30 },
+  { pref: 'BODEGA - TRAGOS LISTOS', dias: 30 },
+  { pref: 'BODEGA - COMBOS Y PROMOCIONES BOD', dias: 30 },
+  // Almacén
+  { pref: 'ALMACEN', dias: 45 },
+  { pref: 'ALMACEN - ADEREZOSSALSAS', dias: 30 },
+  { pref: 'ALMACEN - HARINAS', dias: 30 },
+  { pref: 'ALMACEN - PAN RALLADO', dias: 30 },
+  { pref: 'ALMACEN - FRUTOS SECOS Y SEMILLAS', dias: 30 },
+  { pref: 'ALMACEN - CONSERVAS Y ENLATADO', dias: 60 },
+  { pref: 'ALMACEN - FIDEO', dias: 60 },
+  { pref: 'ALMACEN - ARROZYGRANOS', dias: 60 },
+  { pref: 'ALMACEN - LEGUMBRESSECAS', dias: 60 },
+  { pref: 'ALMACEN - ACEITE VINAGRES', dias: 60 },
+  { pref: 'ALMACEN - CALDOSYSOPAS', dias: 60 },
+  { pref: 'ALMACEN - CONDIMENTO', dias: 60 },
+  { pref: 'ALMACEN - SAL', dias: 0 },
+  { pref: 'ALMACEN - AZUCAR', dias: 0 },
+  // Otros
+  { pref: 'MASCOTAS - RACIONES Y ALIMENTOS', dias: 60 },
+  { pref: 'PERFUMERIA E HIGIENE - FARMACIA', dias: 90 }
+];
+function reglasRecomendadas() { return { cats: VENC_REGLAS_RECOMENDADAS.map(r => Object.assign({}, r)), prods: [] }; }
+let vencReglas = JSON.parse(localStorage.getItem('mm_venc_reglas') || 'null');
+// Si nunca se configuró, o quedó la configuración de ejemplo vieja (PERECIBLES...), usar las recomendadas
+if (!vencReglas || !Array.isArray(vencReglas.cats) ||
+    (vencReglas.cats.length && vencReglas.cats.every(r => String(r.pref || '').toUpperCase().startsWith('PERECIBLES')) && !(vencReglas.prods || []).length)) {
+  vencReglas = reglasRecomendadas();
+}
 let vencFiltro = 'pendientes';
 let vencAbierto = null;
 let vencScanner = null, vencScanning = false;
@@ -3891,7 +3960,7 @@ function limpiarVencResueltos() {
 function renderReglasVenc() {
   const cont = document.getElementById('venc-reglas-cat');
   if (!cont) return;
-  cont.innerHTML = (vencReglas.cats || []).map((r, i) => `
+  cont.innerHTML = (vencReglas.cats || []).map((r, i) => ({ r, i })).sort((a, b) => normCat(a.r.pref).localeCompare(normCat(b.r.pref))).map(({ r, i }) => `
     <div class="venc-regla">
       <input type="text" list="venc-cat-datalist" placeholder="Ej: PERECIBLES - LACTEOS" value="${escHtml(r.pref)}" data-k="cats" data-i="${i}" data-f="pref" aria-label="Categoría">
       <input type="number" min="0" inputmode="numeric" value="${escHtml(r.dias)}" data-k="cats" data-i="${i}" data-f="dias" aria-label="Días de alerta">
@@ -3926,13 +3995,21 @@ function agregarReglaVenc(k) {
   vencReglas = leerReglasVenc();
   vencReglas[k].push(k === 'cats' ? { pref: '', dias: 7 } : { codigo: '', dias: 10 });
   renderReglasVenc();
-  const ins = document.querySelectorAll(`#venc-config [data-k="${k}"]`);
-  if (ins.length) ins[ins.length - 2].focus();
+  const nuevo = document.querySelector(`#venc-config [data-k="${k}"][data-i="${vencReglas[k].length - 1}"]`);
+  if (nuevo) { nuevo.focus(); nuevo.scrollIntoView({ block: 'center' }); }
 }
 function quitarReglaVenc(k, i) {
   vencReglas = leerReglasVenc();
   vencReglas[k].splice(i, 1);
   renderReglasVenc();
+}
+function cargarReglasRecomendadas() {
+  if (!confirm('¿Reemplazar los días de alerta por categoría con los recomendados?\nLas excepciones por producto se mantienen.')) return;
+  const prods = leerReglasVenc().prods;
+  vencReglas = reglasRecomendadas();
+  vencReglas.prods = prods;
+  renderReglasVenc();
+  showToast('📋 Días recomendados cargados — tocá Guardar para confirmar', 'warn');
 }
 function guardarReglasVenc() {
   const r = leerReglasVenc();
