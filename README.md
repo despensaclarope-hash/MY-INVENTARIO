@@ -21,6 +21,7 @@ App para contar el inventario con el celular (`inventario-scanner.html`).
 ## Plano interactivo de ubicación (noviembre 2026)
 - En **📍 Ubicación actual de conteo** se elige la góndola tocándola en el plano (Tienda, Depósito interno, Depósito exterior, Recepción y mesa de trabajo).
 - Muestra el nombre del sector y el responsable (rojo: repositor · amarillo: cajera) y marca con ✓ las góndolas ya contadas.
+- Botón **✅ Conteo terminado** en cada góndola: queda marcada con ✓ en el plano y en la lista (naranja = en curso). En **📊 Progreso** se ve el avance por zona y qué góndolas faltan. Se puede reabrir; al borrar el inventario se reinicia.
 - Botón **☰ Lista** para volver a los botones de siempre; la app recuerda la elección. Las coordenadas están en `PLANOS` dentro del HTML.
 
 ## Módulo Vencimientos (noviembre 2026)
@@ -29,6 +30,7 @@ App para contar el inventario con el celular (`inventario-scanner.html`).
   - Dentro del límite → alerta amarilla/naranja y guarda el lote con su cantidad.
   - Vencido → alerta roja para retirarlo.
   - Botón para guardar otro lote con distinta fecha del mismo producto.
+- El escáner de vencimientos usa la misma cámara, configuración y botones que el de inventario.
 - Pestaña **⏰ Vencim.**: lotes con semáforo, filtros, control rápido de góndolas (registra fechas sin sumar al conteo) y exportar a Excel.
 - Cualquier usuario puede **descontar unidades vendidas** de un lote; si llega a 0 se cierra como *Vendido*. En el control rápido, si el lote ya existe se escribe lo que **queda** en góndola y la diferencia se cuenta como vendida.
 - Gerente, Dueño/a, Supervisor/a y Encargado/a marcan qué se hizo con cada lote (rebajado, al frente, devuelto, merma) y configuran los días de alerta por rubro (ej. `PERECIBLES - LACTEOS` = 15) o por producto (0 = no pedir fecha).

@@ -103,8 +103,9 @@
   .scanner-header { padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; }
   .scanner-title { font-weight: 700; font-size: 14px; }
   .scanner-subtitle { font-size: 11px; color: var(--muted); }
-  #scanner-viewport { position: relative; width: 100%; background: #000; display: none; overflow: hidden; }
-  #scanner-viewport video, #scanner-viewport canvas { width: 100% !important; max-height: 240px; object-fit: cover; }
+  #scanner-viewport, #venc-scanner-viewport { position: relative; width: 100%; background: #000; display: none; overflow: hidden; }
+  #scanner-viewport video, #scanner-viewport canvas,
+  #venc-scanner-viewport video, #venc-scanner-viewport canvas { width: 100% !important; max-height: 240px; object-fit: cover; }
   .scan-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
   .scan-frame { width: 70%; height: 110px; border: 2px solid var(--verde); border-radius: 8px; box-shadow: 0 0 0 2000px rgba(0,0,0,0.45); position: relative; }
   .scan-line { position: absolute; top: 50%; left: 0; right: 0; height: 2px; background: var(--verde); animation: scan 1.5s ease-in-out infinite; box-shadow: 0 0 8px var(--verde); }
@@ -300,7 +301,11 @@
   .plano-g.rep { background: #C62828; color: #fff; }
   .plano-g.caj { background: #F2B705; color: #1A1300; }
   .plano-g.area { background: rgba(255,255,255,0.03); border: 1px dashed var(--muted); color: var(--muted); }
-  .plano-g.done { opacity: 0.5; }
+  .plano-g.done { opacity: 0.45; }
+  .plano-g .curso { position: absolute; top: -5px; right: -5px; width: 11px; height: 11px; border-radius: 6px; background: #FF9800; border: 2px solid var(--card2); }
+  .ubic-btn.terminada { border-color: var(--verde) !important; color: var(--verde); }
+  .term-bar { height: 8px; border-radius: 4px; background: var(--card2); overflow: hidden; margin-top: 4px; }
+  .term-bar > div { height: 100%; background: var(--verde); }
   .plano-g.sel { opacity: 1; border: 3px solid var(--verde); box-shadow: 0 0 0 3px rgba(0,200,83,0.35), 0 0 14px rgba(0,200,83,0.6); z-index: 2; }
   .plano-g .ok { position: absolute; top: -6px; right: -6px; width: 15px; height: 15px; border-radius: 8px; background: var(--verde); color: #04140A; font-size: 9px; line-height: 15px; text-align: center; }
   .plano-lbl { position: absolute; transform: translate(-50%, -50%); text-align: center; font-size: 10px; font-weight: 800; letter-spacing: 0.05em; color: var(--muted); pointer-events: none; line-height: 1.3; }
@@ -431,6 +436,12 @@
   <!-- ══════ PROGRESO ══════ -->
   <div id="tab-progreso" class="section">
 
+    <!-- Avance por góndolas terminadas -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:800;color:var(--verde);margin-bottom:10px;">🗺️ Avance por góndolas terminadas</div>
+      <div id="avance-zonas"></div>
+    </div>
+
     <!-- Selector de categoría -->
     <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px;">
       <div style="font-size:13px;font-weight:800;color:var(--verde);margin-bottom:10px;">📦 Seleccioná la categoría a auditar</div>
@@ -532,6 +543,8 @@
           <div style="font-size:14px;font-weight:800;color:var(--verde)" id="ubicacion-label">Sin ubicación seleccionada</div>
         </div>
       </div>
+      <!-- Conteo terminado de la góndola actual -->
+      <div id="terminar-wrap" style="display:none;margin:-4px 0 12px;"></div>
 
       <div id="ubicacion-selector" style="display:grid;gap:10px;">
         <div class="ubic-modo">
@@ -1050,10 +1063,30 @@
     <div class="input-card" style="margin-top:16px;">
       <h3>📌 Control rápido de góndolas</h3>
       <div style="font-size:11px;color:var(--muted);margin:-8px 0 12px;">Registrá una fecha sin sumar al conteo del inventario.</div>
-      <div id="venc-scanner-viewport" style="display:none;background:#000;border-radius:10px;overflow:hidden;margin-bottom:10px;"><div id="venc-scanner-reader"></div></div>
-      <div style="display:flex;gap:8px;margin-bottom:8px;">
-        <input id="venc-q-codigo" type="text" placeholder="Código de barras" inputmode="numeric" autocomplete="off" style="flex:1" onchange="buscarProductoVencRapido()" onkeydown="if(event.key==='Enter'){event.preventDefault();buscarProductoVencRapido();}">
-        <button class="btn btn-secondary" id="venc-btn-cam" onclick="toggleScannerVenc()" style="flex:0 0 auto;padding:10px 14px;">📷</button>
+      <div class="scanner-container" style="margin-bottom:12px;">
+        <div class="scanner-header">
+          <div>
+            <div class="scanner-title">📷 Escáner de Código de Barras</div>
+            <div class="scanner-subtitle">Apuntá la cámara al código de barras</div>
+          </div>
+        </div>
+        <div id="venc-scanner-viewport">
+          <div id="venc-scanner-reader"></div>
+          <div class="scan-overlay" id="venc-scan-overlay-anim" style="pointer-events:none">
+            <div class="scan-frame"><div class="scan-line"></div></div>
+          </div>
+        </div>
+        <div class="scanner-controls">
+          <button class="btn btn-primary" id="venc-btn-cam" onclick="toggleScannerVenc()">
+            <span>📷</span> Activar Cámara
+          </button>
+          <button class="btn btn-secondary" onclick="document.getElementById('venc-q-codigo').focus()">
+            <span>⌨️</span> Manual
+          </button>
+        </div>
+      </div>
+      <div style="margin-bottom:8px;">
+        <input id="venc-q-codigo" type="text" placeholder="Código de barras" inputmode="numeric" autocomplete="off" style="width:100%" onchange="buscarProductoVencRapido()" onkeydown="if(event.key==='Enter'){event.preventDefault();buscarProductoVencRapido();}">
       </div>
       <div id="venc-q-prod" style="font-size:13px;font-weight:700;color:var(--verde);margin-bottom:8px;min-height:18px;"></div>
       <div id="venc-q-nombre-wrap" style="display:none;margin-bottom:8px;">
@@ -1197,6 +1230,8 @@ const PLANOS = {
 const PLANO_DE_ZONA = { 'TIENDA':'TIENDA', 'DEPOSITO INTERNO':'DEP_INT', 'DEPOSITO EXTERIOR':'DEP_EXT', 'RECEPCION':'RECEP_MESA', 'MESA DE TRABAJO':'RECEP_MESA' };
 let planoActivo = PLANO_DE_ZONA[(JSON.parse(localStorage.getItem('mm_ubicacion') || '{}').zona) || ''] || 'TIENDA';
 let modoUbic = localStorage.getItem('mm_ubic_modo') || 'plano';
+// Góndolas con conteo terminado: { 'ZONA|GONDOLA': { por, fecha, iso, productos, unidades } }
+let terminadas = JSON.parse(localStorage.getItem('mm_terminadas') || '{}');
 
 // ══ TIMING ══
 let tiempoSesion = JSON.parse(localStorage.getItem('mm_tiempo') || '{"inicio":null,"productos":0,"tiempos":[]}');
@@ -1306,7 +1341,7 @@ function actualizarAvisoRespaldo() {
   }
 }
 function descargarRespaldo() {
-  const data = { app: 'inventario-clarope', version: 2, fecha: new Date().toISOString(), inventory, auditLog, ubicacion, vencimientos, vencReglas };
+  const data = { app: 'inventario-clarope', version: 2, fecha: new Date().toISOString(), inventory, auditLog, ubicacion, vencimientos, vencReglas, terminadas };
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -1328,6 +1363,7 @@ function restaurarRespaldo(input) {
       inventory = data.inventory;
       if (Array.isArray(data.auditLog)) auditLog = data.auditLog;
       if (Array.isArray(data.vencimientos)) { vencimientos = data.vencimientos; localStorage.setItem('mm_venc', JSON.stringify(vencimientos)); }
+      if (data.terminadas && typeof data.terminadas === 'object') { terminadas = data.terminadas; guardarTerminadas(); }
       if (data.vencReglas && Array.isArray(data.vencReglas.cats)) { vencReglas = data.vencReglas; localStorage.setItem('mm_venc_reglas', JSON.stringify(vencReglas)); }
       addAudit('system', `Respaldo restaurado (${inventory.length} registros)`, null);
       save();
@@ -1699,6 +1735,7 @@ function clearAll() {
   if (!resp) return;
   if ((resp === '1' || resp === '3') && inventory.length) localStorage.setItem('mm_inv_prev', JSON.stringify(inventory));
 
+  if ((resp === '1' || resp === '3') && Object.keys(terminadas).length) { terminadas = {}; guardarTerminadas(); }
   if (resp === '1' && inventory.length) {
     addAudit('system', `Inventario borrado completo (${inventory.length} productos)`, null);
     inventory = [];
@@ -1754,22 +1791,7 @@ function startScanner() {
 
   html5Scanner = new Html5Qrcode('scanner-reader', { verbose: false });
 
-  const config = {
-    fps: 15,
-    qrbox: { width: 280, height: 120 },
-    aspectRatio: 1.7,
-    formatsToSupport: [
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.CODE_128,
-      Html5QrcodeSupportedFormats.CODE_39,
-      Html5QrcodeSupportedFormats.UPC_A,
-      Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.ITF,
-      Html5QrcodeSupportedFormats.QR_CODE,
-    ]
-  };
-
+  const config = configScanner();
   html5Scanner.start(
     { facingMode: 'environment' },
     config,
@@ -1802,6 +1824,25 @@ function startScanner() {
       showToast('❌ No se pudo acceder a la cámara', 'error');
     }
   });
+}
+
+// Misma configuración para el escáner de inventario y el de vencimientos
+function configScanner() {
+  return {
+    fps: 15,
+    qrbox: { width: 280, height: 120 },
+    aspectRatio: 1.7,
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.ITF,
+      Html5QrcodeSupportedFormats.QR_CODE,
+    ]
+  };
 }
 
 function stopScanner() {
@@ -2767,6 +2808,7 @@ function selGondola(el) {
   el.classList.add('active');
   document.getElementById('nivel-section').style.display = 'block';
   saveUbicacion();
+  avisarSiTerminada();
 }
 
 function selNivel(el) {
@@ -2793,9 +2835,95 @@ function setModoUbic(m) {
   renderPlano();
 }
 function selPlano(k) { planoActivo = k; renderPlano(); }
+
+// ══ CONTEO TERMINADO POR GÓNDOLA ══
+function guardarTerminadas() { localStorage.setItem('mm_terminadas', JSON.stringify(terminadas)); }
+function resumenGondola(zona, gondola) {
+  const items = inventory.filter(i => i.zona === zona && i.gondola === gondola);
+  return { productos: items.length, unidades: redondear(items.reduce((a, i) => a + (Number(i.qty) || 0), 0)) };
+}
+function renderTerminar() {
+  const w = document.getElementById('terminar-wrap');
+  if (!w) return;
+  if (!ubicacion.zona || !ubicacion.gondola) { w.style.display = 'none'; return; }
+  const k = ubicacion.zona + '|' + ubicacion.gondola;
+  const t = terminadas[k];
+  const r = resumenGondola(ubicacion.zona, ubicacion.gondola);
+  w.style.display = 'block';
+  w.innerHTML = t
+    ? `<div style="display:flex;align-items:center;gap:8px;background:rgba(0,200,83,0.12);border:1px solid var(--verde);border-radius:10px;padding:10px 12px;">
+         <div style="flex:1;font-size:12px;line-height:1.4"><b style="color:var(--verde)">✅ ${escHtml(ubicacion.gondola)} terminada</b><br>
+           <span style="color:var(--muted)">${escHtml(t.por || '')} · ${escHtml(t.fecha || '')} · ${r.productos} productos / ${r.unidades} u.</span></div>
+         <button class="btn btn-secondary" style="flex:0 0 auto;padding:8px 10px;font-size:12px" onclick="reabrirGondola()">↺ Reabrir</button>
+       </div>`
+    : `<button class="btn btn-primary" style="width:100%" onclick="terminarGondola()">✅ Conteo terminado en ${escHtml(ubicacion.gondola)} <span style="font-weight:600;opacity:.85">(${r.productos} prod. / ${r.unidades} u.)</span></button>`;
+}
+function terminarGondola() {
+  if (!ubicacion.zona || !ubicacion.gondola) return;
+  const r = resumenGondola(ubicacion.zona, ubicacion.gondola);
+  const s = datosSector(ubicacion.zona, ubicacion.gondola);
+  const nom = `${ubicacion.gondola}${s && s[7] ? ' · ' + s[7] : ''}`;
+  const msg = r.productos
+    ? `¿Terminaste de contar ${nom}?\n\n${r.productos} productos · ${r.unidades} unidades cargadas.\n\nQueda marcada como hecha en el plano.`
+    : `${nom} no tiene productos contados.\n\n¿Marcarla como terminada igual (góndola vacía)?`;
+  if (!confirm(msg)) return;
+  terminadas[ubicacion.zona + '|' + ubicacion.gondola] = {
+    por: operator ? operator.name : '', fecha: nowStr(), iso: nowISO(), productos: r.productos, unidades: r.unidades
+  };
+  guardarTerminadas();
+  addAudit('system', `✅ Conteo terminado: ${ubicacion.zona} › ${nom} (${r.productos} prod. / ${r.unidades} u.)`, null);
+  renderPlano(); renderAudit();
+  showToast(`✅ ${ubicacion.gondola} terminada — elegí la próxima góndola`);
+  // Abrir el selector para elegir la siguiente
+  const sel = document.getElementById('ubicacion-selector');
+  if (sel.style.display === 'none') toggleUbicacionPanel();
+  document.getElementById('ubicacion-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function reabrirGondola() {
+  const k = ubicacion.zona + '|' + ubicacion.gondola;
+  if (!terminadas[k]) return;
+  if (!confirm(`¿Reabrir ${ubicacion.gondola} para seguir contando?`)) return;
+  delete terminadas[k];
+  guardarTerminadas();
+  addAudit('system', `↺ Góndola reabierta: ${ubicacion.zona} › ${ubicacion.gondola}`, null);
+  renderPlano(); renderAudit();
+  showToast(`↺ ${ubicacion.gondola} reabierta`);
+}
+function avisarSiTerminada() {
+  const t = terminadas[ubicacion.zona + '|' + ubicacion.gondola];
+  if (t) showToast(`⚠️ ${ubicacion.gondola} ya fue terminada por ${t.por || '—'}. Si hay que recontar, tocá Reabrir.`, 'warn');
+}
+function marcarListaTerminadas() {
+  document.querySelectorAll('#gondola-btns .ubic-btn').forEach(b => {
+    const ok = !!terminadas[ubicacion.zona + '|' + b.dataset.gond];
+    b.classList.toggle('terminada', ok);
+    b.textContent = b.dataset.gond + (ok ? ' ✓' : '');
+  });
+}
+function renderAvanceZonas() {
+  const cont = document.getElementById('avance-zonas');
+  if (!cont) return;
+  const zonas = Object.keys(ZONAS);
+  let totT = 0, totG = 0;
+  const filas = zonas.map(z => {
+    const gs = ZONAS[z];
+    const t = gs.filter(g => terminadas[z + '|' + g]).length;
+    totT += t; totG += gs.length;
+    const pct = gs.length ? Math.round(t / gs.length * 100) : 0;
+    const faltan = gs.filter(g => !terminadas[z + '|' + g]);
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700"><span>${escHtml(z)}</span><span style="color:${pct === 100 ? 'var(--verde)' : 'var(--text)'}">${t}/${gs.length} · ${pct}%</span></div>
+      <div class="term-bar"><div style="width:${pct}%"></div></div>
+      ${faltan.length && faltan.length < gs.length ? `<div style="font-size:10px;color:var(--muted);margin-top:3px">Faltan: ${faltan.map(escHtml).join(', ')}</div>` : ''}
+    </div>`;
+  }).join('');
+  const pctT = totG ? Math.round(totT / totG * 100) : 0;
+  cont.innerHTML = `<div style="font-size:22px;font-weight:800;color:var(--verde);margin-bottom:8px">${totT}/${totG} <span style="font-size:12px;color:var(--muted);font-weight:600">góndolas terminadas · ${pctT}%</span></div>` + filas;
+}
 function selGondolaPlano(zona, id) {
   ubicacion = { zona, gondola: id, nivel: '' };
   initUbicacion();               // sincroniza también la vista de lista y muestra los niveles
+  avisarSiTerminada();
   if (navigator.vibrate) navigator.vibrate(30);
 }
 function renderPlano() {
@@ -2803,32 +2931,37 @@ function renderPlano() {
   if (!sel) return;
   sel.classList.toggle('modo-plano', modoUbic === 'plano');
   document.querySelectorAll('.ubic-modo button').forEach(b => b.classList.toggle('active', b.dataset.modo === modoUbic));
-  if (modoUbic !== 'plano') return;
+  renderTerminar();
+  renderAvanceZonas();
+  if (modoUbic !== 'plano') { marcarListaTerminadas(); return; }
   document.getElementById('plano-tabs').innerHTML = Object.keys(PLANOS).map(k =>
     `<button type="button" class="${k === planoActivo ? 'active' : ''}" onclick="selPlano('${k}')">${PLANOS[k].titulo}</button>`).join('');
   const p = PLANOS[planoActivo];
   const contadas = new Set(inventory.map(i => (i.zona || '') + '|' + (i.gondola || '')));
+  marcarListaTerminadas();
   const pct = (v, t) => (v / t * 100).toFixed(2) + '%';
   let html = p.cabecera ? `<div class="plano-head">${p.cabecera}</div>` : '';
   html += `<div class="plano-map" style="aspect-ratio:${p.w} / ${p.h}">`;
   if (p.linea) html += `<div class="plano-linea" style="top:${pct(p.linea - p.oy, p.h)}"></div>`;
   html += p.etiquetas.map(e => `<div class="plano-lbl" style="left:${pct(e[1] - p.ox, p.w)};top:${pct(e[2] - p.oy, p.h)}">${e[0]}</div>`).join('');
-  let hechas = 0;
+  let hechas = 0, curso = 0;
   html += p.g.map(g => {
     const [id, zona, x, y, w, h, resp, nombre] = g;
-    const done = contadas.has(zona + '|' + id); if (done) hechas++;
+    const done = !!terminadas[zona + '|' + id]; if (done) hechas++;
+    const enCurso = !done && contadas.has(zona + '|' + id); if (enCurso) curso++;
     const esSel = ubicacion.zona === zona && ubicacion.gondola === id;
     const cls = ['plano-g', resp === 'C' ? 'caj' : resp === 'A' ? 'area' : 'rep', done ? 'done' : '', esSel ? 'sel' : ''].join(' ');
     const titulo = `${id}${nombre ? ' · ' + nombre : ''}`;
     return `<button type="button" class="${cls}" title="${escHtml(titulo)}" aria-label="${escHtml(titulo)}"
       style="left:${pct(x - p.ox, p.w)};top:${pct(y - p.oy, p.h)};width:${pct(w, p.w)};height:${pct(h, p.h)}"
-      onclick="selGondolaPlano('${zona}','${id}')">${id}${done ? '<span class="ok">✓</span>' : ''}</button>`;
+      onclick="selGondolaPlano('${zona}','${id}')">${id}${done ? '<span class="ok">✓</span>' : enCurso ? '<span class="curso"></span>' : ''}</button>`;
   }).join('');
-  html += `</div><div class="plano-leyenda"><span><i style="background:#C62828"></i>Repositor</span><span><i style="background:#F2B705"></i>Cajera</span><span><i style="background:var(--verde);border-radius:5px"></i>Contada (${hechas}/${p.g.length})</span></div>`;
+  html += `</div><div class="plano-leyenda"><span><i style="background:#C62828"></i>Repositor</span><span><i style="background:#F2B705"></i>Cajera</span><span><i style="background:var(--verde);border-radius:5px"></i>Terminada (${hechas}/${p.g.length})</span><span><i style="background:#FF9800;border-radius:5px"></i>En curso (${curso})</span></div>`;
   document.getElementById('plano-cont').innerHTML = html;
   const s = datosSector(ubicacion.zona, ubicacion.gondola);
   document.getElementById('plano-info').textContent = s
-    ? `📍 ${s[0]}${s[7] ? ' · ' + s[7] : ''} — ${s[6] === 'C' ? 'Cajera' : 'Repositor'}${ubicacion.nivel ? '' : ' · elegí el nivel'}`
+    ? `📍 ${s[0]}${s[7] ? ' · ' + s[7] : ''} — ${s[6] === 'C' ? 'Cajera' : 'Repositor'}` +
+      (terminadas[ubicacion.zona + '|' + ubicacion.gondola] ? ' · ✅ ya terminada' : ubicacion.nivel ? '' : ' · elegí el nivel')
     : 'Tocá la góndola donde vas a contar';
 }
 
@@ -3553,33 +3686,46 @@ function iniciarScannerVenc() {
   vencScanner = new Html5Qrcode('venc-scanner-reader', { verbose: false });
   vencScanner.start(
     { facingMode: 'environment' },
-    { fps: 15, qrbox: { width: 260, height: 110 }, aspectRatio: 1.7,
-      formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
-        Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.ITF] },
-    (txt) => {
+    configScanner(),
+    (decodedText) => {
+      // ✅ Lectura exitosa — igual que el escáner de inventario
       detenerScannerVenc();
-      document.getElementById('venc-q-codigo').value = txt.trim();
+      const code = decodedText.trim();
+      document.getElementById('venc-q-codigo').value = code;
       if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+      showToast(`✅ Código: ${code}`);
       buscarProductoVencRapido();
     },
-    () => {}
+    () => { /* frame sin código — ignorar */ }
   ).then(() => {
     vencScanning = true;
-    document.getElementById('venc-btn-cam').textContent = '⏹️';
-  }).catch(() => {
+    const b = document.getElementById('venc-btn-cam');
+    b.innerHTML = '<span>⏹️</span> Detener Cámara';
+    b.className = 'btn btn-danger';
+    document.getElementById('venc-scan-overlay-anim').style.display = 'none';
+    const readerEl = document.querySelector('#venc-scanner-reader video');
+    if (readerEl) { readerEl.style.maxHeight = '260px'; readerEl.style.width = '100%'; }
+  }).catch(err => {
+    console.error(err);
     vp.style.display = 'none';
     vencScanning = false; vencScanner = null;
-    showToast('❌ No se pudo acceder a la cámara', 'error');
+    if (String(err).includes('Permission') || String(err).includes('NotAllowed')) {
+      showToast('❌ Permiso de cámara denegado — habilitalo en Chrome', 'error');
+    } else {
+      showToast('❌ No se pudo acceder a la cámara', 'error');
+    }
   });
 }
 function detenerScannerVenc() {
+  const b = document.getElementById('venc-btn-cam');
+  if (b) { b.innerHTML = '<span>📷</span> Activar Cámara'; b.className = 'btn btn-primary'; }
   if (!vencScanner && !vencScanning) return;
   vencScanning = false;
   const s = vencScanner; vencScanner = null;
   if (s) s.stop().catch(() => {}).finally(() => { try { s.clear(); } catch (e) {} });
   const vp = document.getElementById('venc-scanner-viewport'); if (vp) vp.style.display = 'none';
-  const b = document.getElementById('venc-btn-cam'); if (b) b.textContent = '📷';
+  const ov = document.getElementById('venc-scan-overlay-anim'); if (ov) ov.style.display = 'flex';
+  const rd = document.getElementById('venc-scanner-reader'); if (rd) rd.innerHTML = '';
 }
 
 // ── Pestaña Vencimientos ──
