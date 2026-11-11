@@ -1030,7 +1030,7 @@ const TIPOS = {
   inv: {
     hoja: 'CONTEO',
     cab: ['ID', 'Código', 'Producto', 'Cantidad', 'Precio', 'Rubro', 'Zona', 'Góndola', 'Nivel', 'Operador', 'Fecha/Hora'],
-    fila: d =&gt; [d.id, d.barcode || '', d.name || '', Number(d.qty) || 0, Number(d.price) || 0, d.cat || '',
+    fila: d =&gt; [String(d.id), d.barcode || '', d.name || '', Number(d.qty) || 0, Number(d.price) || 0, d.cat || '',
                 d.zona || '', d.gondola || '', d.nivel || '', d.lastOperator || d.operator || '', d.lastUpdate || d.datetime || '']
   },
   term: {
@@ -1041,12 +1041,17 @@ const TIPOS = {
   venc: {
     hoja: 'VENCIMIENTOS',
     cab: ['ID', 'Código', 'Producto', 'Rubro', 'Vence', 'Cantidad', 'Vendidas', 'Sector', 'Registró', 'Estado', 'Acción por', 'Fecha acción', 'Nota'],
-    fila: d =&gt; [d.id || '', d.barcode || '', d.name || '', d.cat || '', d.fecha || '', Number(d.qty) || 0, Number(d.vendidas) || 0,
+    fila: d =&gt; [String(d.id || ''), d.barcode || '', d.name || '', d.cat || '', d.fecha || '', Number(d.qty) || 0, Number(d.vendidas) || 0,
                 [d.zona, d.gondola].filter(String).join(' › '), d.ultimoOperador || d.operator || '', d.estado || 'Pendiente',
                 d.accionPor || '', d.accionFecha || '', d.nota || '']
   }
 };
 const EXTRA = ['Actualizado', 'Borrado', '_datos'];
+// El ID de cada fila se toma de _datos (texto exacto): Sheets redondea números de más de 15 cifras
+function idDeFila(r, ncol) {
+  try { const d = JSON.parse(r[ncol - 1] || 'null'); if (d) return String(d.key != null ? d.key : d.id); } catch (err) {}
+  return String(r[0]);
+}
 const MAESTRO_CAB = ['Código', 'Código 2', 'Nombre', 'Rubro', 'Stock', 'Precio', 'Costo'];
 
 // ── Entradas web ──
@@ -1138,7 +1143,7 @@ function aplicar(t, ops, ahora) {
   const sh = hojaDe(def.hoja, cab);
   const filas = leerFilas(sh, ncol);
   const idx = {};
-  filas.forEach((r, i) =&gt; { idx[String(r[0])] = i; });
+  filas.forEach((r, i) =&gt; { idx[idDeFila(r, ncol)] = i; });
   ops.forEach(o =&gt; {
     const id = String(o.id);
     const i = idx[id];
@@ -1177,7 +1182,7 @@ function sync(desde) {
     res[t] = filas.filter(r =&gt; Number(r[ncol - 3]) &gt; desde).map(r =&gt; {
       let data = null;
       try { data = JSON.parse(r[ncol - 1] || 'null'); } catch (err) {}
-      return { id: String(r[0]), del: r[ncol - 2] === 1 || r[ncol - 2] === '1', data: data };
+      return { id: idDeFila(r, ncol), del: r[ncol - 2] === 1 || r[ncol - 2] === '1', data: data };
     });
   });
   const reglas = getConfigFila('reglas');
