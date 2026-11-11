@@ -18,6 +18,11 @@ App para contar el inventario con el celular (`inventario-scanner.html`).
 - Recepción B1–B7 y Mesa de trabajo T1–T11, como en los planos.
 - Aviso de conteo sin exportar, copia de seguridad, restaurar y recuperar lo último borrado.
 
+## Plano interactivo de ubicación (noviembre 2026)
+- En **📍 Ubicación actual de conteo** se elige la góndola tocándola en el plano (Tienda, Depósito interno, Depósito exterior, Recepción y mesa de trabajo).
+- Muestra el nombre del sector y el responsable (rojo: repositor · amarillo: cajera) y marca con ✓ las góndolas ya contadas.
+- Botón **☰ Lista** para volver a los botones de siempre; la app recuerda la elección. Las coordenadas están en `PLANOS` dentro del HTML.
+
 ## Módulo Vencimientos (noviembre 2026)
 - Al escanear un producto cuya categoría tiene **días de alerta**, la app pide la fecha del lote más próximo.
   - Faltan más días que el límite → avisa OK y no guarda nada.

@@ -283,6 +283,31 @@
   .prog-item-name  { font-weight: 700; font-size: 11px; margin-bottom: 2px; }
   .prog-item-meta  { font-size: 10px; color: var(--muted); }
 
+  /* ── PLANO DE UBICACIÓN ── */
+  #ubicacion-selector.modo-plano #zona-section,
+  #ubicacion-selector.modo-plano #gondola-section { display: none !important; }
+  #ubicacion-selector:not(.modo-plano) #plano-section { display: none; }
+  .ubic-modo { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .ubic-modo button { flex: 1; background: transparent; border: 0; color: var(--muted); padding: 8px 10px; font-size: 12px; font-weight: 700; font-family: var(--font); cursor: pointer; }
+  .ubic-modo button.active { background: var(--verde); color: #04140A; }
+  .plano-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; margin-bottom: 8px; }
+  .plano-tabs button { flex: 0 0 auto; background: var(--card2); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; font-family: var(--font); cursor: pointer; }
+  .plano-tabs button.active { border-color: var(--verde); color: var(--verde); background: rgba(0,200,83,0.12); }
+  .plano-head { text-align: center; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: #F0D4DA; background: #2A1A1F; border: 1px solid var(--border); border-bottom: 0; border-radius: 10px 10px 0 0; padding: 7px 0; }
+  .plano-map { position: relative; width: 100%; background: var(--card2); border: 1px solid var(--border); border-radius: 10px; }
+  .plano-head + .plano-map { border-radius: 0 0 10px 10px; }
+  .plano-g { position: absolute; box-sizing: border-box; padding: 0; border-radius: 5px; border: 1px solid rgba(0,0,0,0.4); font-family: var(--font); font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .plano-g.rep { background: #C62828; color: #fff; }
+  .plano-g.caj { background: #F2B705; color: #1A1300; }
+  .plano-g.area { background: rgba(255,255,255,0.03); border: 1px dashed var(--muted); color: var(--muted); }
+  .plano-g.done { opacity: 0.5; }
+  .plano-g.sel { opacity: 1; border: 3px solid var(--verde); box-shadow: 0 0 0 3px rgba(0,200,83,0.35), 0 0 14px rgba(0,200,83,0.6); z-index: 2; }
+  .plano-g .ok { position: absolute; top: -6px; right: -6px; width: 15px; height: 15px; border-radius: 8px; background: var(--verde); color: #04140A; font-size: 9px; line-height: 15px; text-align: center; }
+  .plano-lbl { position: absolute; transform: translate(-50%, -50%); text-align: center; font-size: 10px; font-weight: 800; letter-spacing: 0.05em; color: var(--muted); pointer-events: none; line-height: 1.3; }
+  .plano-linea { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--muted); pointer-events: none; }
+  .plano-leyenda { display: flex; flex-wrap: wrap; gap: 10px; font-size: 10px; color: var(--muted); margin-top: 6px; }
+  .plano-leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+
   /* ── VENCIMIENTOS ── */
   input[type="date"] { color-scheme: dark; min-height: 42px; }
   .venc-badge { display: none; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--rojo); color: #fff; font-size: 10px; font-weight: 800; line-height: 16px; margin-left: 3px; vertical-align: middle; }
@@ -509,8 +534,18 @@
       </div>
 
       <div id="ubicacion-selector" style="display:grid;gap:10px;">
+        <div class="ubic-modo">
+          <button type="button" data-modo="plano" onclick="setModoUbic('plano')">🗺️ Plano</button>
+          <button type="button" data-modo="lista" onclick="setModoUbic('lista')">☰ Lista</button>
+        </div>
+        <!-- Plano interactivo -->
+        <div id="plano-section">
+          <div class="plano-tabs" id="plano-tabs"></div>
+          <div id="plano-cont"></div>
+          <div id="plano-info" style="font-size:12px;font-weight:700;color:var(--verde);margin-top:8px;min-height:16px;"></div>
+        </div>
         <!-- Zona -->
-        <div>
+        <div id="zona-section">
           <label style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;display:block;margin-bottom:5px;">Zona / Área</label>
           <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;" id="zona-btns">
             <button class="ubic-btn" onclick="selZona(this)" data-zona="TIENDA">🏪 TIENDA</button>
@@ -1099,6 +1134,70 @@ const ZONAS = {
   'MESA DE TRABAJO':   ['T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11']
 };
 
+// ══ PLANOS — coordenadas tomadas de los planos del local (rojo: repositor · amarillo: cajera) ══
+// Cada góndola: [id, zona, x, y, ancho, alto, responsable('R'|'C'|'A'=área de piso), nombre]
+const PLANOS = {
+  TIENDA: {
+    titulo: 'Tienda', cabecera: 'PATIO · ENTRADA', ox: 14, oy: 70, w: 322, h: 478,
+    etiquetas: [['ENTRADA', 118, 115], ['ZONA TIENDA', 211, 266]],
+    g: [
+      ['R3','TIENDA',27,90,29,28,'R'],['C1','TIENDA',27,124,44,28,'C'],['C2','TIENDA',27,154,44,28,'C'],
+      ['C8','TIENDA',178,85,95,19,'C'],['R2','TIENDA',192,124,45,41,'R'],['R1','TIENDA',295,83,35,87,'R'],
+      ['C9','TIENDA',305,185,27,33,'C'],['C3','TIENDA',54,190,37,18,'C'],['C5','TIENDA',94,190,36,18,'C'],
+      ['C4','TIENDA',18,187,32,45,'C'],['C6','TIENDA',94,211,35,62,'C'],['C7','TIENDA',94,278,35,62,'C'],
+      ['C10','TIENDA',20,277,30,48,'C'],['C11','TIENDA',20,340,30,55,'C'],['R4','TIENDA',299,221,37,58,'R'],
+      ['R5','TIENDA',299,283,37,57,'R'],['R6','TIENDA',299,352,37,41,'R'],['R7','TIENDA',299,405,37,62,'R'],
+      ['R8','TIENDA',299,477,37,65,'R'],['R15','TIENDA',134,394,62,25,'R'],['R14','TIENDA',134,423,62,25,'R'],
+      ['R13','TIENDA',20,402,29,58,'R'],['R12','TIENDA',22,470,28,23,'R'],['R11','TIENDA',40,516,80,29,'R'],
+      ['R10','TIENDA',122,516,81,29,'R'],['R9','TIENDA',205,516,79,29,'R']
+    ]
+  },
+  DEP_INT: {
+    titulo: 'Dep. interno', ox: 12, oy: 27, w: 265, h: 380,
+    etiquetas: [['ZONA DEPÓSITO<br>INTERNO', 145, 98]],
+    g: [
+      ['D1','DEPOSITO INTERNO',16,34,103,20,'R','Galletas dulces'],['D2','DEPOSITO INTERNO',131,34,102,20,'R','Galletas saladas'],
+      ['D3','DEPOSITO INTERNO',239,34,30,70,'R','Productos secos'],['D4','DEPOSITO INTERNO',239,106,30,70,'R','Productos secos'],
+      ['D5','DEPOSITO INTERNO',239,179,30,69,'R','Perfumería'],['D6','DEPOSITO INTERNO',239,251,30,69,'R','Perfumería'],
+      ['D7','DEPOSITO INTERNO',239,323,30,68,'R','Limpieza'],['D8','DEPOSITO INTERNO',16,157,25,55,'R','Desayuno / Merienda'],
+      ['D9','DEPOSITO INTERNO',16,214,25,55,'R','Desayuno / Merienda'],['D10','DEPOSITO INTERNO',16,272,25,55,'R','Enlatados / Aderezos'],
+      ['D11','DEPOSITO INTERNO',16,330,25,55,'R','Enlatados / Aderezos'],['D12','DEPOSITO INTERNO',121,189,43,140,'R','Productos secos'],
+      ['D13','DEPOSITO INTERNO',95,138,90,26,'A','Piso central'],
+      ['S1','DEPOSITO INTERNO',69,369,67,21,'R','Papel y bolsas'],['S2','DEPOSITO INTERNO',13,106,20,42,'R','Cajas de galletas']
+    ]
+  },
+  DEP_EXT: {
+    titulo: 'Dep. exterior', ox: 44, oy: 36, w: 511, h: 482,
+    etiquetas: [['ZONA DEPÓSITO EXTERIOR', 265, 205]],
+    g: [
+      ['E1','DEPOSITO EXTERIOR',158,53,104,58,'R','Bebidas gaseosas'],['E2','DEPOSITO EXTERIOR',271,53,57,71,'C','Heladera verduras'],
+      ['E3','DEPOSITO EXTERIOR',331,53,57,71,'C','Heladera verduras / salchichas'],['E4','DEPOSITO EXTERIOR',398,53,64,49,'R','Bebidas gaseosas'],
+      ['E5','DEPOSITO EXTERIOR',502,364,48,145,'R','Bebidas gaseosas'],['E6','DEPOSITO EXTERIOR',320,473,151,36,'R','Papas apiladas'],
+      ['E7','DEPOSITO EXTERIOR',198,438,110,76,'R','Bebidas en cajas'],['E8','DEPOSITO EXTERIOR',44,145,47,138,'R','Lavadero'],
+      ['E9','DEPOSITO EXTERIOR',244,239,131,76,'R','Bebidas en cajas']
+    ]
+  },
+  RECEP_MESA: {
+    titulo: 'Recepción y mesa', cabecera: 'PATIO · ENTRADA', ox: 31, oy: 85, w: 227, h: 385, linea: 300,
+    etiquetas: [['ZONA DE RECEPCIÓN<br>PROVEEDORES', 148, 127], ['ZONA MESA<br>DE TRABAJO', 150, 347]],
+    g: [
+      ['B1','RECEPCION',38,97,27,30,'R','Garrafas'],['B2','RECEPCION',232,97,24,40,'R','Carbón'],
+      ['B3','RECEPCION',38,155,23,140,'R','Bebidas'],['B4','RECEPCION',116,173,43,50,'R','Verduras'],
+      ['B5','RECEPCION',232,155,24,113,'R','Bebidas'],['B6','RECEPCION',69,284,100,14,'R','Panadería'],
+      ['B7','RECEPCION',232,271,24,25,'R','Mascotas'],
+      ['T1','MESA DE TRABAJO',38,305,131,17,'C','Kiosco'],['T2','MESA DE TRABAJO',232,304,24,18,'R','Balanza'],
+      ['T3','MESA DE TRABAJO',38,330,15,38,'R','Especias'],['T4','MESA DE TRABAJO',232,330,24,38,'R','Freezer pollo'],
+      ['T5','MESA DE TRABAJO',38,372,26,36,'R','Hamburguesas'],['T6','MESA DE TRABAJO',101,370,36,38,'R','Mesa de trabajo'],
+      ['T7','MESA DE TRABAJO',232,374,24,38,'R','Congelado'],['T8','MESA DE TRABAJO',38,415,15,35,'R','Huevos'],
+      ['T9','MESA DE TRABAJO',71,442,33,26,'R','Armario'],['T10','MESA DE TRABAJO',115,441,33,28,'R','Heladera fiambre'],
+      ['T11','MESA DE TRABAJO',154,441,33,28,'R','Heladera bebidas']
+    ]
+  }
+};
+const PLANO_DE_ZONA = { 'TIENDA':'TIENDA', 'DEPOSITO INTERNO':'DEP_INT', 'DEPOSITO EXTERIOR':'DEP_EXT', 'RECEPCION':'RECEP_MESA', 'MESA DE TRABAJO':'RECEP_MESA' };
+let planoActivo = PLANO_DE_ZONA[(JSON.parse(localStorage.getItem('mm_ubicacion') || '{}').zona) || ''] || 'TIENDA';
+let modoUbic = localStorage.getItem('mm_ubic_modo') || 'plano';
+
 // ══ TIMING ══
 let tiempoSesion = JSON.parse(localStorage.getItem('mm_tiempo') || '{"inicio":null,"productos":0,"tiempos":[]}');
 
@@ -1349,6 +1448,7 @@ function refreshAll() {
   renderProgreso();
   actualizarAvisoRespaldo();
   renderVencimientos();
+  renderPlano();
 }
 
 // ══ AUDIT LOG ══
@@ -2635,8 +2735,10 @@ if (operator) {
 function saveUbicacion() {
   localStorage.setItem('mm_ubicacion', JSON.stringify(ubicacion));
   const parts = [ubicacion.zona, ubicacion.gondola, ubicacion.nivel].filter(Boolean);
+  const sector = datosSector(ubicacion.zona, ubicacion.gondola);
   document.getElementById('ubicacion-label').textContent =
-    parts.length ? parts.join(' › ') : 'Sin ubicación seleccionada';
+    parts.length ? parts.join(' › ') + (sector && sector[7] ? ' · ' + sector[7] : '') : 'Sin ubicación seleccionada';
+  renderPlano();
 }
 
 function selZona(el) {
@@ -2677,6 +2779,57 @@ function selNivel(el) {
     document.getElementById('ubicacion-selector').style.display = 'none';
     document.getElementById('btn-ubic-toggle').textContent = '▼ Cambiar ubicación';
   }, 400);
+}
+
+// ══ PLANO INTERACTIVO ══
+function datosSector(zona, id) {
+  if (!zona || !id) return null;
+  const p = PLANOS[PLANO_DE_ZONA[zona]];
+  return p ? p.g.find(g => g[0] === id && g[1] === zona) || null : null;
+}
+function setModoUbic(m) {
+  modoUbic = m === 'lista' ? 'lista' : 'plano';
+  localStorage.setItem('mm_ubic_modo', modoUbic);
+  renderPlano();
+}
+function selPlano(k) { planoActivo = k; renderPlano(); }
+function selGondolaPlano(zona, id) {
+  ubicacion = { zona, gondola: id, nivel: '' };
+  initUbicacion();               // sincroniza también la vista de lista y muestra los niveles
+  if (navigator.vibrate) navigator.vibrate(30);
+}
+function renderPlano() {
+  const sel = document.getElementById('ubicacion-selector');
+  if (!sel) return;
+  sel.classList.toggle('modo-plano', modoUbic === 'plano');
+  document.querySelectorAll('.ubic-modo button').forEach(b => b.classList.toggle('active', b.dataset.modo === modoUbic));
+  if (modoUbic !== 'plano') return;
+  document.getElementById('plano-tabs').innerHTML = Object.keys(PLANOS).map(k =>
+    `<button type="button" class="${k === planoActivo ? 'active' : ''}" onclick="selPlano('${k}')">${PLANOS[k].titulo}</button>`).join('');
+  const p = PLANOS[planoActivo];
+  const contadas = new Set(inventory.map(i => (i.zona || '') + '|' + (i.gondola || '')));
+  const pct = (v, t) => (v / t * 100).toFixed(2) + '%';
+  let html = p.cabecera ? `<div class="plano-head">${p.cabecera}</div>` : '';
+  html += `<div class="plano-map" style="aspect-ratio:${p.w} / ${p.h}">`;
+  if (p.linea) html += `<div class="plano-linea" style="top:${pct(p.linea - p.oy, p.h)}"></div>`;
+  html += p.etiquetas.map(e => `<div class="plano-lbl" style="left:${pct(e[1] - p.ox, p.w)};top:${pct(e[2] - p.oy, p.h)}">${e[0]}</div>`).join('');
+  let hechas = 0;
+  html += p.g.map(g => {
+    const [id, zona, x, y, w, h, resp, nombre] = g;
+    const done = contadas.has(zona + '|' + id); if (done) hechas++;
+    const esSel = ubicacion.zona === zona && ubicacion.gondola === id;
+    const cls = ['plano-g', resp === 'C' ? 'caj' : resp === 'A' ? 'area' : 'rep', done ? 'done' : '', esSel ? 'sel' : ''].join(' ');
+    const titulo = `${id}${nombre ? ' · ' + nombre : ''}`;
+    return `<button type="button" class="${cls}" title="${escHtml(titulo)}" aria-label="${escHtml(titulo)}"
+      style="left:${pct(x - p.ox, p.w)};top:${pct(y - p.oy, p.h)};width:${pct(w, p.w)};height:${pct(h, p.h)}"
+      onclick="selGondolaPlano('${zona}','${id}')">${id}${done ? '<span class="ok">✓</span>' : ''}</button>`;
+  }).join('');
+  html += `</div><div class="plano-leyenda"><span><i style="background:#C62828"></i>Repositor</span><span><i style="background:#F2B705"></i>Cajera</span><span><i style="background:var(--verde);border-radius:5px"></i>Contada (${hechas}/${p.g.length})</span></div>`;
+  document.getElementById('plano-cont').innerHTML = html;
+  const s = datosSector(ubicacion.zona, ubicacion.gondola);
+  document.getElementById('plano-info').textContent = s
+    ? `📍 ${s[0]}${s[7] ? ' · ' + s[7] : ''} — ${s[6] === 'C' ? 'Cajera' : 'Repositor'}${ubicacion.nivel ? '' : ' · elegí el nivel'}`
+    : 'Tocá la góndola donde vas a contar';
 }
 
 function toggleUbicacionPanel() {
