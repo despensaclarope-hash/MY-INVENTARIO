@@ -16,7 +16,7 @@
 
 const HOJA_VENC = 'VENCIMIENTOS';
 const CABECERA_VENC = ['ID', 'Código', 'Producto', 'Rubro', 'Fecha venc.', 'Días al registrar',
-  'Cantidad', 'Sector', 'Registró', 'Fecha registro', 'Estado', 'Acción por', 'Fecha acción', 'Nota'];
+  'Cantidad', 'Sector', 'Registró', 'Fecha registro', 'Estado', 'Acción por', 'Fecha acción', 'Nota', 'Vendidas'];
 
 function registrarVencimiento(p) {
   const lock = LockService.getScriptLock();
@@ -29,12 +29,15 @@ function registrarVencimiento(p) {
       hoja.getRange(1, 1, 1, CABECERA_VENC.length).setValues([CABECERA_VENC])
         .setFontWeight('bold').setBackground('#0F172A').setFontColor('#FFFFFF');
       hoja.setFrozenRows(1);
+    } else if (hoja.getRange(1, CABECERA_VENC.length).getValue() !== 'Vendidas') {
+      hoja.getRange(1, CABECERA_VENC.length).setValue('Vendidas')
+        .setFontWeight('bold').setBackground('#0F172A').setFontColor('#FFFFFF');
     }
 
     const fila = [
       p.id || '', p.barcode || '', p.name || '', p.cat || '', p.fecha || '', Number(p.dias),
       Number(p.qty) || 0, p.sector || '', p.operator || '', p.registrado || '',
-      p.estado || 'Pendiente', p.accionPor || '', p.accionFecha || '', p.nota || ''
+      p.estado || 'Pendiente', p.accionPor || '', p.accionFecha || '', p.nota || '', Number(p.vendidas) || 0
     ];
 
     // Buscar el lote por ID para actualizarlo; si no existe, agregarlo

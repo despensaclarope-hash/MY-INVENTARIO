@@ -1084,7 +1084,8 @@ const VENC_ESTADOS = {
   'Rebajado':  '🏷️ Rebajado de precio',
   'Al frente': '⬆️ Pasado al frente',
   'Devuelto':  '↩️ Devuelto a proveedor',
-  'Merma':     '🗑️ Retirado (merma)'
+  'Merma':     '🗑️ Retirado (merma)',
+  'Vendido':   '🛒 Vendido todo'
 };
 const vencCtx = {};   // contexto de cada panel: 'found' (producto escaneado), 'inp' (producto nuevo), 'venc-q' (control rápido)
 
@@ -3232,6 +3233,10 @@ function actualizarEstadoVenc(pref) {
   if (nivel === 'rojo')      { titulo = `🚫 ${textoDias(dias).toUpperCase()}`; detalle = 'Retirar de góndola. Se guarda para seguimiento.'; }
   else if (nivel === 'verde') { titulo = `✅ Fecha OK · faltan ${dias} días`; detalle = rapido ? (lim ? `Está lejos del límite (${lim} días), igual se guarda si tocás Guardar.` : 'Este producto no tiene alerta configurada; se guarda igual si tocás Guardar.') : `No se guarda (límite: ${lim} días).`; }
   else                        { titulo = `⏰ ${textoDias(dias)}`; detalle = lim ? `Dentro del límite de ${lim} días: se guarda para seguimiento.` : 'Se guarda para seguimiento.'; }
+  if (rapido && ctx.item) {
+    const ex = lotePendienteDe(ctx.item, fecha);
+    if (ex) detalle = `Ya registrado: ${ex.qty} u. Escribí cuántas QUEDAN en góndola; la diferencia se descuenta como vendida.`;
+  }
   est.className = `venc-estado show venc-${nivel}`;
   est.innerHTML = `${escHtml(titulo)}<small>${escHtml(detalle)}</small>`;
   if (wrap && !rapido) {
@@ -3344,6 +3349,10 @@ function buscarProductoVencRapido() {
   actualizarEstadoVenc('venc-q');
   document.getElementById(m ? 'venc-q-fecha' : 'venc-q-nombre').focus();
 }
+function lotePendienteDe(item, fecha) {
+  const ref = { barcode: item.barcode || '', barcode2: item.barcode2 || '', name: item.name || '' };
+  return vencimientos.find(v => v.estado === 'Pendiente' && v.fecha === fecha && mismoProducto(v, ref));
+}
 function guardarVencRapido() {
   const code = normCod(document.getElementById('venc-q-codigo').value);
   if (!code) { showToast('⚠️ Escaneá o escribí el código', 'warn'); return; }
@@ -3355,8 +3364,23 @@ function guardarVencRapido() {
   const fecha = document.getElementById('venc-q-fecha').value;
   if (!fechaValida(fecha)) { showToast('⚠️ Elegí la fecha de vencimiento', 'warn'); return; }
   const qv = parseFloat(String(document.getElementById('venc-q-qty').value).replace(',', '.'));
-  const l = registrarLote(item, fecha, isNaN(qv) ? 1 : redondear(qv), 'control');
-  showToast(`⏰ ${l.name}: ${fechaCorta(l.fecha)} guardado (${l.qty} u.)`);
+  const qty = isNaN(qv) ? 1 : redondear(qv);
+  const existente = lotePendienteDe(item, fecha);
+  if (existente) {
+    const antes = existente.qty;
+    existente.qty = qty;
+    if (qty < antes) existente.vendidas = redondear((existente.vendidas || 0) + (antes - qty));
+    existente.ultimaVez = nowStr(); existente.ultimoOperador = operator ? operator.name : '';
+    if (qty <= 0) { existente.estado = 'Vendido'; existente.accionPor = operator ? operator.name : ''; existente.accionFecha = nowStr(); existente.accionIso = nowISO(); }
+    guardarVenc();
+    addAudit('update', `⏰ Control: lote ${fechaCorta(fecha)} ${antes} → ${qty} u.${qty < antes ? ` (🛒 ${redondear(antes - qty)} vendidas)` : ''}`, existente.name);
+    sendVencToSheets(existente, 'control');
+    renderVencimientos();
+    showToast(qty <= 0 ? `✅ ${existente.name}: lote vendido completo` : `🔄 ${existente.name}: quedan ${qty} u. (antes ${antes})`);
+  } else {
+    const l = registrarLote(item, fecha, qty, 'control');
+    showToast(`⏰ ${l.name}: ${fechaCorta(l.fecha)} guardado (${l.qty} u.)`);
+  }
   ['venc-q-codigo', 'venc-q-fecha', 'venc-q-nombre'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('venc-q-qty').value = '1';
   document.getElementById('venc-q-prod').textContent = '';
@@ -3454,14 +3478,16 @@ function renderVencimientos() {
     const pill = g === 'resueltos' ? escHtml(v.estado) : (dias === null ? '—' : dias < 0 ? 'Vencido' : dias === 0 ? 'Hoy' : `${dias} día${dias === 1 ? '' : 's'}`);
     const abierto = vencAbierto === v.id;
     const id = escHtml(v.id);
-    let acciones = '';
+    let acciones = g !== 'resueltos'
+      ? `<button class="venc-acc-btn" style="width:100%;margin-bottom:6px;border-color:var(--verde);color:var(--verde)" onclick="descontarVendidasVenc('${id}')">🛒 Descontar unidades vendidas</button>`
+      : '';
     if (gestiona && g !== 'resueltos') {
-      acciones = `<div class="venc-acc-grid">${Object.keys(VENC_ESTADOS).map(k =>
+      acciones += `<div class="venc-acc-grid">${Object.keys(VENC_ESTADOS).map(k =>
         `<button class="venc-acc-btn" onclick="accionVenc('${id}','${k}')">${VENC_ESTADOS[k]}</button>`).join('')}</div>`;
     } else if (gestiona) {
-      acciones = `<button class="venc-acc-btn" style="width:100%" onclick="reabrirVenc('${id}')">↺ Volver a pendiente</button>`;
+      acciones += `<button class="venc-acc-btn" style="width:100%" onclick="reabrirVenc('${id}')">↺ Volver a pendiente</button>`;
     } else {
-      acciones = `<div style="font-size:11px;color:var(--muted)">Avisá al encargado o gerente para que decida qué hacer con este lote.</div>`;
+      acciones += `<div style="font-size:11px;color:var(--muted)">Avisá al encargado o gerente para que decida qué hacer con este lote.</div>`;
     }
     const extras = [
       gestiona ? `<button class="venc-acc-btn" onclick="corregirQtyVenc('${id}')">✏️ Corregir cantidad</button>` : '',
@@ -3472,7 +3498,7 @@ function renderVencimientos() {
         <div style="min-width:0">
           <div class="venc-name">${escHtml(v.name)}</div>
           <div class="venc-meta">
-            ${v.cat ? escHtml(v.cat) + ' · ' : ''}<b style="color:var(--text)">${v.qty} u.</b> · vence <b style="color:var(--text)">${fechaCorta(v.fecha)}</b><br>
+            ${v.cat ? escHtml(v.cat) + ' · ' : ''}<b style="color:var(--text)">${v.qty} u.</b>${v.vendidas ? ` <span style="color:var(--verde)">(🛒 ${v.vendidas} vendidas)</span>` : ''} · vence <b style="color:var(--text)">${fechaCorta(v.fecha)}</b><br>
             📍 ${escHtml(v.gondola || v.zona || 'sin sector')} · 👤 ${escHtml(v.ultimoOperador || v.operator || '')} · ${escHtml(v.ultimaVez || v.registrado || '')}
             ${v.barcode ? `<br><span style="font-family:monospace">${escHtml(v.barcode)}</span>` : ''}
             ${g === 'resueltos' ? `<br>✔ ${escHtml(VENC_ESTADOS[v.estado] || v.estado)} — ${escHtml(v.accionPor || '')} ${escHtml(v.accionFecha || '')}${v.nota ? ' · ' + escHtml(v.nota) : ''}` : ''}
@@ -3492,6 +3518,7 @@ function accionVenc(id, estado) {
   const l = loteVenc(id); if (!l) return;
   const nota = prompt(`${VENC_ESTADOS[estado]}\n${l.name} · ${l.qty} u. · vence ${fechaCorta(l.fecha)}\n\nNota (opcional, ej: 30% de rebaja):`, '');
   if (nota === null) return;
+  if (estado === 'Vendido' && l.qty > 0) { l.vendidas = redondear((l.vendidas || 0) + l.qty); l.qty = 0; }
   l.estado = estado; l.nota = nota.trim();
   l.accionPor = operator ? operator.name : ''; l.accionFecha = nowStr(); l.accionIso = nowISO();
   guardarVenc();
@@ -3500,6 +3527,28 @@ function accionVenc(id, estado) {
   vencAbierto = null;
   renderVencimientos(); renderAudit();
   showToast(`✅ ${l.name}: ${VENC_ESTADOS[estado]}`);
+}
+function descontarVendidasVenc(id) {
+  const l = loteVenc(id); if (!l) return;
+  const r = prompt(`🛒 ${l.name} · vence ${fechaCorta(l.fecha)}\nQuedan ${l.qty} u. en este lote.\n\n¿Cuántas unidades se vendieron?`, '');
+  if (r === null || !String(r).trim()) return;
+  const n = parseFloat(String(r).replace(',', '.'));
+  if (isNaN(n) || n <= 0) { showToast('Cantidad inválida', 'warn'); return; }
+  if (n > l.qty && !confirm(`Se vendieron ${n} pero el lote tenía ${l.qty}. ¿Dejar el lote en 0?`)) return;
+  const vend = redondear(Math.min(n, l.qty));
+  l.qty = redondear(l.qty - vend);
+  l.vendidas = redondear((l.vendidas || 0) + vend);
+  l.ultimaVez = nowStr(); l.ultimoOperador = operator ? operator.name : '';
+  if (l.qty <= 0) {
+    l.qty = 0; l.estado = 'Vendido';
+    l.accionPor = operator ? operator.name : ''; l.accionFecha = nowStr(); l.accionIso = nowISO();
+  }
+  guardarVenc();
+  addAudit('update', `⏰ 🛒 ${vend} u. vendidas · lote ${fechaCorta(l.fecha)} (quedan ${l.qty})`, l.name);
+  sendVencToSheets(l, 'venta');
+  if (l.estado === 'Vendido') vencAbierto = null;
+  renderVencimientos(); renderAudit();
+  showToast(l.estado === 'Vendido' ? `✅ ${l.name}: lote vendido completo` : `🛒 Descontadas ${vend} u. — quedan ${l.qty}`);
 }
 function reabrirVenc(id) {
   const l = loteVenc(id); if (!l) return;
@@ -3601,15 +3650,15 @@ function guardarReglasVenc() {
 function exportarVencimientos() {
   if (!vencimientos.length) { showToast('No hay vencimientos para exportar', 'warn'); return; }
   const rows = [['Código','Código alternativo','Producto','Rubro','Fecha vencimiento','Días restantes','Cantidad',
-                 'Área','Sector','Registró','Fecha registro','Estado','Acción por','Fecha acción','Nota']];
+                 'Área','Sector','Registró','Fecha registro','Estado','Acción por','Fecha acción','Nota','Vendidas']];
   [...vencimientos].sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))).forEach(v => {
     rows.push([v.barcode || '', v.barcode2 || '', v.name, v.cat || '', fechaCorta(v.fecha), diasHasta(v.fecha), v.qty,
                v.zona || '', v.gondola || '', v.ultimoOperador || v.operator || '', v.ultimaVez || v.registrado || '',
-               v.estado, v.accionPor || '', v.accionFecha || '', v.nota || '']);
+               v.estado, v.accionPor || '', v.accionFecha || '', v.nota || '', v.vendidas || 0]);
   });
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{wch:15},{wch:15},{wch:36},{wch:26},{wch:12},{wch:9},{wch:9},{wch:16},{wch:8},{wch:14},{wch:20},{wch:11},{wch:14},{wch:20},{wch:24}];
-  ws['!autofilter'] = { ref: `A1:O${rows.length}` };
+  ws['!cols'] = [{wch:15},{wch:15},{wch:36},{wch:26},{wch:12},{wch:9},{wch:9},{wch:16},{wch:8},{wch:14},{wch:20},{wch:11},{wch:14},{wch:20},{wch:24},{wch:9}];
+  ws['!autofilter'] = { ref: `A1:P${rows.length}` };
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Vencimientos');
   XLSX.writeFile(wb, `Vencimientos_${hoyISO()}.xlsx`);
@@ -3624,7 +3673,7 @@ async function sendVencToSheets(l, evento) {
       fecha: fechaCorta(l.fecha), dias: diasHasta(l.fecha) ?? '', qty: l.qty || 0,
       sector: [l.zona, l.gondola].filter(Boolean).join(' › '),
       operator: l.ultimoOperador || l.operator || '', registrado: l.ultimaVez || l.registrado || '',
-      estado: l.estado || 'Pendiente', accionPor: l.accionPor || '', accionFecha: l.accionFecha || '', nota: l.nota || ''
+      estado: l.estado || 'Pendiente', accionPor: l.accionPor || '', accionFecha: l.accionFecha || '', nota: l.nota || '', vendidas: l.vendidas || 0
     });
     await fetch(`${sheetsUrl}?${params.toString()}`, { method: 'GET', mode: 'no-cors' });
   } catch (e) { console.warn('Sheets vencimiento error:', e); }
