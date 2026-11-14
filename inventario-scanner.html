@@ -652,7 +652,7 @@
         <div class="found-icon">📦</div>
         <div>
           <div class="found-title" id="found-name">Producto encontrado</div>
-          <div class="found-sub">✅ Ya contado en este sector — sumá la cantidad</div>
+          <div class="found-sub" id="found-sub">✅ Ya contado en este sector — sumá la cantidad</div>
         </div>
       </div>
       <div class="found-info">
@@ -2668,9 +2668,24 @@ function importXLSX(input) {
 
       if (isMaestro) {
         syncSubirMaestro = true; localStorage.setItem('mm_maestro_subir', '1');
+
+        // Si hay inventario en curso → preguntar si empezar nuevo
+        if (inventory.length > 0) {
+          const resetear = confirm(
+            `⚠️ Ya tenés un inventario en curso con ${inventory.length} producto${inventory.length !== 1 ? 's' : ''} contado${inventory.length !== 1 ? 's' : ''}.\n\n¿Empezar inventario nuevo?\n\n✅ Aceptar → se cargan las cantidades del maestro nuevo y se resetean los conteos\n❌ Cancelar → se mantienen los conteos actuales`
+          );
+          if (resetear) {
+            addAudit('system', `Nuevo inventario iniciado — conteo anterior reseteado (${inventory.length} productos)`, null);
+            inventory = [];
+            save();
+            showToast('🔄 Conteo reseteado — nuevo inventario iniciado');
+          }
+        }
+
         addAudit('system', `Maestro importado: ${added} productos de referencia (${skipped} sin nombre omitidos)`, null);
         inventory.forEach(i => completarDesdeMaestro(i));
         save();
+        refreshAll();
         showToast(`✅ Maestro: ${added} productos cargados${skipped ? ' · ' + skipped + ' omitidos' : ''}`);
       } else {
         addAudit('system', `Importación: ${added} nuevos, ${updated} actualizados, ${skipped} omitidos`, null);
@@ -2791,11 +2806,22 @@ function renderProgreso() {
 function precargarDesdeProgreso(barcode, name, cat, price, barcode2) {
   switchTab('scan', document.querySelectorAll('.tab')[0]);
   dismissFound();
-  document.getElementById('inp-barcode').value = barcode;
-  document.getElementById('inp-barcode2').value = barcode2 || '';
-  document.getElementById('inp-name').value    = name;
-  document.getElementById('inp-cat').value     = cat;
-  document.getElementById('inp-price').value   = price;
+
+  // Si hay ubicación seleccionada y el producto está en maestro → mostrar panel verde directamente
+  if (hayUbicacion() && barcode) {
+    const enMaestro = buscarMaestro(normCod(barcode));
+    if (enMaestro) {
+      lookupBarcode(barcode);
+      return;
+    }
+  }
+
+  // Si no hay maestro o no tiene código, precargar formulario
+  document.getElementById('inp-barcode').value  = barcode    || '';
+  document.getElementById('inp-barcode2').value = barcode2   || '';
+  document.getElementById('inp-name').value     = name       || '';
+  document.getElementById('inp-cat').value      = cat        || '';
+  document.getElementById('inp-price').value    = price      || '';
   document.getElementById('inp-qty').focus();
   showToast(`📦 ${name} — ingresá la cantidad`);
 }
@@ -3649,8 +3675,10 @@ function lookupBarcode(code) {
   dismissFound();
 
   // 4. Producto completamente nuevo (no está en maestro ni en inventario)
+  // Poner el código en el campo para que el usuario vea qué se leyó
+  document.getElementById('inp-barcode').value = codeNorm;
   showToast(`🔢 Código ${codeNorm} no está en el maestro — completá los datos`, 'warn');
-  document.getElementById('inp-qty').focus();
+  document.getElementById('inp-name').focus();
 }
 
 function showFoundPanel(item) {
@@ -3663,6 +3691,19 @@ function showFoundPanel(item) {
     ? `stock sistema: ${item.qty}`
     : (`${item.qty} en ${textoSector(item)}` + (tot !== item.qty ? ` · total ${tot} (${detalleSectores(item)})` : ''));
   document.getElementById('found-op').textContent    = (item.operator || '—') + (item.datetime ? '\n' + item.datetime : '');
+
+  // Subtítulo dinámico según origen
+  const subEl = document.getElementById('found-sub');
+  if (subEl) {
+    const sectorActual = [ubicacion.zona, ubicacion.gondola].filter(Boolean).join(' › ') || 'sector actual';
+    if (item._desdeMaestro) {
+      subEl.textContent = `📋 En maestro — se agregará en ${sectorActual}`;
+    } else if (!mismoSector(item)) {
+      subEl.textContent = `📍 Contado en ${textoSector(item)} — se agrega en ${sectorActual}`;
+    } else {
+      subEl.textContent = `✅ Ya contado en este sector — sumá la cantidad`;
+    }
+  }
 
   // hide the regular form, show found panel
   document.getElementById('found-panel').classList.add('visible');
@@ -3678,12 +3719,22 @@ function showFoundPanel(item) {
 }
 
 function dismissFound(forceNew) {
+  const ref = foundProductRef; // guardar antes de limpiar
   foundProductRef = null;
   document.getElementById('found-panel').classList.remove('visible');
   document.querySelector('.input-card').style.display = 'block';
   if (forceNew) {
-    // keep barcode, jump to name so they can enter new product name
-    document.getElementById('inp-name').value = '';
+    // Si venía del maestro, precargar todos los datos en el formulario
+    if (ref && ref._desdeMaestro) {
+      document.getElementById('inp-barcode').value  = ref.barcode  || '';
+      document.getElementById('inp-barcode2').value = ref.barcode2 || '';
+      document.getElementById('inp-name').value     = ref.name     || '';
+      document.getElementById('inp-cat').value      = ref.cat      || '';
+      document.getElementById('inp-price').value    = ref.price    || '';
+    } else {
+      // Producto ya escaneado → solo limpiar nombre para que escriban uno nuevo
+      document.getElementById('inp-name').value = '';
+    }
     document.getElementById('inp-name').focus();
   }
 }
@@ -3696,19 +3747,20 @@ function confirmFoundProduct() {
   // Si el item viene del maestro (aún no fue escaneado), crear nuevo registro en inventory
   if (foundProductRef._desdeMaestro) {
     const nuevoItem = {
-      id:        nuevoId(),
-      barcode:   foundProductRef.barcode  || '',
-      barcode2:  foundProductRef.barcode2 || '',
-      name:      foundProductRef.name     || '',
-      cat:       foundProductRef.cat      || '',
-      price:     foundProductRef.price    || '',
-      qty:       addQty,
-      zona:      ubicacion.zona     || '',
-      gondola:   ubicacion.gondola  || '',
-      nivel:     ubicacion.nivel    || '',
-      operator:  operator.name,
-      datetime:  nowStr(),
-      isoDate:   nowISO(),
+      id:          nuevoId(),
+      barcode:     foundProductRef.barcode  || '',
+      barcode2:    foundProductRef.barcode2 || '',
+      name:        foundProductRef.name     || '',
+      cat:         foundProductRef.cat      || '',
+      price:       foundProductRef.price    || '',
+      qty:         addQty,
+      stockSistema: foundProductRef.qty || 0,  // stock del maestro para calcular diferencia
+      zona:        ubicacion.zona     || '',
+      gondola:     ubicacion.gondola  || '',
+      nivel:       ubicacion.nivel    || '',
+      operator:    operator.name,
+      datetime:    nowStr(),
+      isoDate:     nowISO(),
       lastUpdate:    nowStr(),
       lastIso:       nowISO(),
       lastOperator:  operator.name
