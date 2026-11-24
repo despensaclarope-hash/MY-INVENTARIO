@@ -170,6 +170,22 @@
   .item-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
   .badge { font-size: 10px; padding: 2px 7px; border-radius: 20px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
   .badge-green  { background: rgba(0,200,83,0.15); color: var(--verde); }
+
+  /* Verificador de precios */
+  .prec-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
+  .prec-card.nf { border-color: var(--rojo); }
+  .prec-nombre { font-size: 15px; font-weight: 700; line-height: 1.3; }
+  .prec-meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .prec-precio { font-size: 40px; font-weight: 800; color: var(--verde); margin: 12px 0 4px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .prec-sub { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .prec-sub b { color: var(--text); }
+  .prec-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .prec-resumen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .prec-resumen div { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px; text-align: center; }
+  .prec-resumen b { display: block; font-size: 20px; }
+  .prec-resumen span { font-size: 10px; color: var(--muted); }
+  .prec-dif-mas { color: var(--amarillo); font-weight: 700; }
+  .prec-dif-menos { color: var(--rojo); font-weight: 700; }
   .badge-blue   { background: rgba(21,101,192,0.2); color: #64B5F6; }
   .badge-orange { background: rgba(249,168,37,0.15); color: var(--amarillo); }
   .badge-purple { background: rgba(156,39,176,0.2); color: #CE93D8; }
@@ -450,6 +466,7 @@
     <button class="tab" onclick="switchTab('audit',this)">📝 Auditoría</button>
     <button class="tab" onclick="switchTab('export',this)">💾 Exportar</button>
     <button class="tab" onclick="switchTab('venc',this)">⏰ Vencim.<span class="venc-badge" id="venc-badge"></span></button>
+    <button class="tab" onclick="switchTab('precios',this)">🏷️ Precios<span class="venc-badge" id="prec-badge"></span></button>
   </div>
 
   <!-- ══════ PROGRESO ══════ -->
@@ -1333,6 +1350,52 @@ function leerMaestro() {
     </div>
   </div>
 
+  <!-- ══════ VERIFICADOR DE PRECIOS ══════ -->
+  <div id="tab-precios" class="section">
+    <div class="input-card">
+      <h3>🏷️ Verificador de precios</h3>
+      <div style="font-size:11px;color:var(--muted);margin:-8px 0 12px;">Escaneá un producto para ver su precio en el sistema y compararlo con la etiqueta de la góndola. <span id="prec-fuente"></span></div>
+      <div class="scanner-container" style="margin-bottom:12px;">
+        <div id="prec-scanner-viewport" style="display:none">
+          <div id="prec-scanner-reader"></div>
+          <div class="scan-overlay" id="prec-scan-overlay-anim" style="pointer-events:none">
+            <div class="scan-frame"><div class="scan-line"></div></div>
+          </div>
+        </div>
+        <div class="scanner-controls">
+          <button class="btn btn-primary" id="prec-btn-cam" onclick="toggleScannerPrecio()">
+            <span>📷</span> Activar Cámara
+          </button>
+          <button class="btn btn-secondary" onclick="document.getElementById('prec-codigo').focus()">
+            <span>⌨️</span> Manual
+          </button>
+        </div>
+      </div>
+      <input id="prec-codigo" type="text" placeholder="Código de barras" inputmode="numeric" autocomplete="off" style="width:100%"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();buscarPrecio(false);}">
+    </div>
+
+    <div id="prec-resultado"></div>
+
+    <div class="prec-resumen" id="prec-resumen"></div>
+
+    <div class="table-header" style="margin-top:4px;">
+      <h3 style="font-size:14px;color:var(--verde);">📋 Para corregir</h3>
+    </div>
+    <div class="items-list" id="prec-lista"></div>
+
+    <div class="export-grid" style="margin-top:12px;">
+      <div class="export-card" onclick="exportarPrecios()">
+        <div class="export-icon">📊</div>
+        <div class="export-info"><h3>Exportar control de precios</h3><p>Etiquetas para corregir y todo lo controlado</p></div>
+      </div>
+      <div class="export-card" id="prec-card-limpiar" onclick="limpiarPrecios()" style="display:none">
+        <div class="export-icon">🧹</div>
+        <div class="export-info"><h3 style="color:var(--rojo)">Borrar control de precios</h3><p>Empieza un control nuevo (exportá antes)</p></div>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /app -->
 
 <div class="toast" id="toast"></div>
@@ -1440,6 +1503,8 @@ if (!vencReglas || !Array.isArray(vencReglas.cats) ||
 let vencFiltro = 'pendientes';
 let vencAbierto = null;
 let vencScanner = null, vencScanning = false;
+let preciosCtrl = JSON.parse(localStorage.getItem('mm_precios') || '[]');   // controles del verificador de precios
+let precScanner = null, precScanning = false, precActual = null, precDesdeCamara = false;
 const VENC_ESTADOS = {
   'Rebajado':  '🏷️ Rebajado de precio',
   'Al frente': '⬆️ Pasado al frente',
@@ -1654,7 +1719,7 @@ function actualizarAvisoRespaldo() {
   }
 }
 function descargarRespaldo() {
-  const data = { app: 'inventario-clarope', version: 2, fecha: new Date().toISOString(), inventory, auditLog, ubicacion, vencimientos, vencReglas, terminadas };
+  const data = { app: 'inventario-clarope', version: 2, fecha: new Date().toISOString(), inventory, auditLog, ubicacion, vencimientos, vencReglas, terminadas, preciosCtrl };
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -1678,6 +1743,7 @@ function restaurarRespaldo(input) {
       if (Array.isArray(data.vencimientos)) { vencimientos = data.vencimientos; localStorage.setItem('mm_venc', JSON.stringify(vencimientos)); }
       if (data.terminadas && typeof data.terminadas === 'object') { terminadas = data.terminadas; guardarTerminadas(); }
       if (data.vencReglas && Array.isArray(data.vencReglas.cats)) { vencReglas = data.vencReglas; localStorage.setItem('mm_venc_reglas', JSON.stringify(vencReglas)); }
+      if (Array.isArray(data.preciosCtrl)) { preciosCtrl = data.preciosCtrl; guardarPrecios(); }
       addAudit('system', `Respaldo restaurado (${inventory.length} registros)`, null);
       save();
       showToast('✅ Respaldo restaurado');
@@ -1798,6 +1864,7 @@ function refreshAll() {
   renderProgreso();
   actualizarAvisoRespaldo();
   renderVencimientos();
+  renderPrecios();
   renderPlano();
 }
 
@@ -3114,8 +3181,10 @@ function switchTab(name, el) {
   if (el) el.classList.add('active');
   if (scanning && name!=='scan') stopScanner();
   if (name !== 'venc') detenerScannerVenc();
+  if (name !== 'precios') detenerScannerPrecio();
   if (name === 'progreso') { updateProgresoSelector(); renderProgreso(); }
   if (name === 'venc') { renderVencimientos(); renderReglasVenc(); }
+  if (name === 'precios') { renderPrecios(); setTimeout(() => document.getElementById('prec-codigo').focus(), 50); }
 }
 
 // ══ INIT ══
@@ -4107,6 +4176,221 @@ function detenerScannerVenc() {
   const vp = document.getElementById('venc-scanner-viewport'); if (vp) vp.style.display = 'none';
   const ov = document.getElementById('venc-scan-overlay-anim'); if (ov) ov.style.display = 'flex';
   const rd = document.getElementById('venc-scanner-reader'); if (rd) rd.innerHTML = '';
+}
+
+// ══ VERIFICADOR DE PRECIOS ══
+//  Escanea un producto, muestra el precio del maestro y registra si la etiqueta de la góndola coincide.
+//  Datos en localStorage: mm_precios (no se borran con el inventario; entran en la copia de seguridad).
+function guardarPrecios() { localStorage.setItem('mm_precios', JSON.stringify(preciosCtrl)); }
+function plata(n) { return '$' + (Number(n) || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function leerPlata(id) {
+  let v = String(document.getElementById(id).value || '').trim().replace(/\$|\s/g, '');
+  if (v.includes(',')) v = v.replace(/\./g, '').replace(',', '.');   // 1.234,50 → 1234.50
+  else if (/^\d{1,3}(\.\d{3})+$/.test(v)) v = v.replace(/\./g, '');   // 4.500 → 4500 (punto de miles)
+  const n = parseFloat(v);
+  return isNaN(n) ? null : Math.round(n * 100) / 100;
+}
+
+function toggleScannerPrecio() { precScanning ? detenerScannerPrecio() : iniciarScannerPrecio(); }
+function iniciarScannerPrecio() {
+  if (scanning) stopScanner();
+  detenerScannerVenc();
+  const vp = document.getElementById('prec-scanner-viewport');
+  vp.style.display = 'block';
+  document.getElementById('prec-scanner-reader').innerHTML = '';
+  precScanner = new Html5Qrcode('prec-scanner-reader', { verbose: false });
+  precScanner.start(
+    { facingMode: 'environment' },
+    configScanner(),
+    (decodedText) => {
+      detenerScannerPrecio();
+      document.getElementById('prec-codigo').value = decodedText.trim();
+      if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+      buscarPrecio(true);
+    },
+    () => { /* frame sin código — ignorar */ }
+  ).then(() => {
+    precScanning = true;
+    const b = document.getElementById('prec-btn-cam');
+    b.innerHTML = '<span>⏹️</span> Detener Cámara';
+    b.className = 'btn btn-danger';
+    document.getElementById('prec-scan-overlay-anim').style.display = 'none';
+    const v = document.querySelector('#prec-scanner-reader video');
+    if (v) { v.style.maxHeight = '260px'; v.style.width = '100%'; }
+  }).catch(err => {
+    console.error(err);
+    vp.style.display = 'none';
+    precScanning = false; precScanner = null;
+    showToast(String(err).includes('Permission') || String(err).includes('NotAllowed')
+      ? '❌ Permiso de cámara denegado — habilitalo en Chrome' : '❌ No se pudo acceder a la cámara', 'error');
+  });
+}
+function detenerScannerPrecio() {
+  const b = document.getElementById('prec-btn-cam');
+  if (b) { b.innerHTML = '<span>📷</span> Activar Cámara'; b.className = 'btn btn-primary'; }
+  if (!precScanner && !precScanning) return;
+  precScanning = false;
+  const s = precScanner; precScanner = null;
+  if (s) s.stop().catch(() => {}).finally(() => { try { s.clear(); } catch (e) {} });
+  const vp = document.getElementById('prec-scanner-viewport'); if (vp) vp.style.display = 'none';
+  const ov = document.getElementById('prec-scan-overlay-anim'); if (ov) ov.style.display = 'flex';
+  const rd = document.getElementById('prec-scanner-reader'); if (rd) rd.innerHTML = '';
+}
+
+function buscarPrecio(desdeCamara) {
+  const code = normCod(document.getElementById('prec-codigo').value);
+  const box = document.getElementById('prec-resultado');
+  if (!code) { box.innerHTML = ''; precActual = null; return; }
+  precDesdeCamara = !!desdeCamara;
+  const m = buscarMaestro(code);
+  precActual = { code, m };
+  const ultimo = [...preciosCtrl].reverse().find(r => r.barcode === code || (m && codigosDe(m).includes(r.barcode)));
+  const previo = ultimo ? `<div class="prec-meta">Último control: ${escHtml(ultimo.fechaStr)} · ${escHtml(ultimo.estado)}${ultimo.gondola !== null && ultimo.gondola !== undefined ? ' · góndola ' + plata(ultimo.gondola) : ''}</div>` : '';
+  if (!m) {
+    box.innerHTML = `
+      <div class="prec-card nf">
+        <div class="prec-nombre" style="color:var(--rojo)">❓ No está en el maestro</div>
+        <div class="prec-meta">Código ${escHtml(code)}${maestro.length ? '' : ' · No hay maestro cargado: importalo en 💾 Exportar'}</div>
+        ${previo}
+        <div style="margin-top:12px;"><label>Precio de la etiqueta (opcional)</label>
+          <input id="prec-gondola" type="text" inputmode="decimal" placeholder="Ej: 1250" style="width:100%"></div>
+        <div class="prec-acciones" style="grid-template-columns:1fr;">
+          <button class="btn btn-warning" onclick="registrarPrecio('No está en maestro')">📝 Anotar para dar de alta</button>
+        </div>
+      </div>`;
+    if (navigator.vibrate) navigator.vibrate(300);
+    return;
+  }
+  const gestion = veDiferencia();
+  const margen = m.price > 0 && m.cost > 0 ? Math.round((m.price - m.cost) / m.price * 1000) / 10 : null;
+  box.innerHTML = `
+    <div class="prec-card">
+      <div class="prec-nombre">${escHtml(m.name)}</div>
+      <div class="prec-meta">${escHtml(m.cat || 'Sin rubro')} · ${escHtml(codigosDe(m).join(' / '))}</div>
+      <div class="prec-precio">${m.price ? plata(m.price) : 'Sin precio'}</div>
+      <div class="prec-sub">
+        <span>Stock sistema: <b>${redondear(m.qty || 0)}</b></span>
+        ${gestion && m.cost ? `<span>Costo c/IVA: <b>${plata(m.cost)}</b></span>` : ''}
+        ${gestion && margen !== null ? `<span>Margen: <b style="color:${margen < 15 ? 'var(--rojo)' : 'var(--verde)'}">${margen.toLocaleString('es-AR')}%</b></span>` : ''}
+      </div>
+      ${previo}
+      <div style="margin-top:12px;"><label>Precio de la etiqueta en góndola</label>
+        <input id="prec-gondola" type="text" inputmode="decimal" placeholder="Solo si es distinto" style="width:100%"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();registrarPrecio('Distinto');}"></div>
+      <div class="prec-acciones">
+        <button class="btn btn-primary" onclick="registrarPrecio('OK')">✅ Coincide</button>
+        <button class="btn btn-warning" onclick="registrarPrecio('Distinto')">⚠️ Es distinto</button>
+      </div>
+      <div class="prec-acciones" style="grid-template-columns:1fr;">
+        <button class="btn btn-secondary" onclick="registrarPrecio('Sin etiqueta')">🚫 No tiene etiqueta</button>
+      </div>
+    </div>`;
+}
+
+function registrarPrecio(estado) {
+  if (!precActual) return;
+  const { code, m } = precActual;
+  let gondola = document.getElementById('prec-gondola') ? leerPlata('prec-gondola') : null;
+  const sistema = m ? (Number(m.price) || 0) : null;
+  if (estado === 'Distinto') {
+    if (gondola === null) { showToast('Escribí el precio de la etiqueta', 'error'); document.getElementById('prec-gondola').focus(); return; }
+    if (sistema !== null && Math.abs(gondola - sistema) < 0.01) estado = 'OK';
+  }
+  if (estado === 'OK') gondola = sistema;
+  if (estado === 'Sin etiqueta') gondola = null;
+  const reg = {
+    id: Date.now() + Math.random().toString(36).slice(2, 6),
+    iso: nowISO(), fechaStr: nowStr(), operador: operator ? operator.name : '',
+    barcode: m ? (normCod(m.barcode) || code) : code, barcode2: m ? normCod(m.barcode2) : '',
+    name: m ? m.name : '', cat: m ? (m.cat || '') : '',
+    sistema, gondola, estado,
+    zona: ubicacion.zona || '', sector: ubicacion.gondola || '',
+    corregido: estado === 'OK'
+  };
+  preciosCtrl.push(reg);
+  guardarPrecios();
+  if (estado !== 'OK') addAudit('update', `🏷️ Precio ${estado.toLowerCase()}${gondola !== null && sistema !== null ? `: góndola ${plata(gondola)} · sistema ${plata(sistema)}` : ''}`, reg.name || code);
+  showToast(estado === 'OK' ? '✅ Precio correcto' : `⚠️ Anotado para corregir (${estado})`, estado === 'OK' ? undefined : 'warn');
+  document.getElementById('prec-codigo').value = '';
+  document.getElementById('prec-resultado').innerHTML = '';
+  precActual = null;
+  renderPrecios();
+  if (precDesdeCamara) iniciarScannerPrecio(); else document.getElementById('prec-codigo').focus();
+}
+
+function marcarPrecioCorregido(id) {
+  const r = preciosCtrl.find(x => x.id === id);
+  if (!r) return;
+  r.corregido = !r.corregido;
+  r.corregidoPor = r.corregido ? (operator ? operator.name : '') : '';
+  r.corregidoFecha = r.corregido ? nowStr() : '';
+  guardarPrecios();
+  if (r.corregido) addAudit('update', '🏷️ Etiqueta corregida', r.name || r.barcode);
+  renderPrecios();
+}
+
+function renderPrecios() {
+  const lista = document.getElementById('prec-lista');
+  if (!lista) return;
+  const hoy = hoyISO();
+  const deHoy = preciosCtrl.filter(r => (r.iso || '').slice(0, 10) === hoy || new Date(r.iso).toDateString() === new Date().toDateString());
+  const pend = preciosCtrl.filter(r => !r.corregido);
+  document.getElementById('prec-resumen').innerHTML = `
+    <div><b>${deHoy.length}</b><span>Controlados hoy</span></div>
+    <div><b style="color:var(--verde)">${deHoy.filter(r => r.estado === 'OK').length}</b><span>Correctos hoy</span></div>
+    <div><b style="color:var(--amarillo)">${pend.length}</b><span>Para corregir</span></div>`;
+  const badge = document.getElementById('prec-badge');
+  if (badge) { badge.textContent = pend.length; badge.classList.toggle('show', pend.length > 0); }
+  const fuente = document.getElementById('prec-fuente');
+  if (fuente) fuente.textContent = maestro.length ? `Precios del maestro cargado (${maestro.length} productos): importá el maestro del día para que estén al día.` : '⚠️ No hay maestro cargado.';
+  document.getElementById('prec-card-limpiar').style.display = puedeBorrar() ? '' : 'none';
+  if (!pend.length) { lista.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:16px;">No hay etiquetas para corregir 👌</div>'; return; }
+  lista.innerHTML = [...pend].reverse().map(r => {
+    const dif = (r.gondola !== null && r.gondola !== undefined && r.sistema !== null && r.sistema !== undefined) ? r.gondola - r.sistema : null;
+    return `
+    <div class="item-card">
+      <div>
+        <div style="font-weight:700;font-size:13px;">${escHtml(r.name || 'Código ' + r.barcode)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${escHtml(r.barcode)}${r.sector ? ' · 📍' + escHtml(r.sector) : ''} · ${escHtml(r.fechaStr)} · ${escHtml(r.operador)}</div>
+        <div style="font-size:12px;margin-top:6px;">
+          ${r.estado === 'Sin etiqueta' ? '🚫 Sin etiqueta' : r.estado === 'No está en maestro' ? '❓ No está en el maestro' : '⚠️ Distinto'}
+          ${r.sistema !== null && r.sistema !== undefined ? ` · Sistema <b>${plata(r.sistema)}</b>` : ''}
+          ${r.gondola !== null && r.gondola !== undefined ? ` · Góndola <b>${plata(r.gondola)}</b>` : ''}
+          ${dif !== null ? ` <span class="${dif > 0 ? 'prec-dif-mas' : 'prec-dif-menos'}">(${dif > 0 ? '+' : '−'}${plata(Math.abs(dif))})</span>` : ''}
+        </div>
+      </div>
+      <button class="btn btn-secondary" style="padding:8px 10px;font-size:11px;" onclick="marcarPrecioCorregido('${r.id}')">✔ Corregido</button>
+    </div>`;
+  }).join('');
+}
+
+function exportarPrecios() {
+  if (!preciosCtrl.length) { showToast('No hay controles de precio para exportar', 'warn'); return; }
+  const head = ['Fecha','Controló','Código','Código alternativo','Producto','Rubro','Área','Sector','Estado','Precio sistema','Precio góndola','Diferencia','Corregido','Corrigió','Fecha corrección'];
+  const fila = r => [r.fechaStr, r.operador, r.barcode, r.barcode2 || '', r.name, r.cat, r.zona, r.sector, r.estado,
+    r.sistema ?? '', r.gondola ?? '', (r.gondola !== null && r.gondola !== undefined && r.sistema !== null && r.sistema !== undefined) ? Math.round((r.gondola - r.sistema) * 100) / 100 : '',
+    r.corregido ? 'Sí' : 'No', r.corregidoPor || '', r.corregidoFecha || ''];
+  const hoja = rows => {
+    const ws = XLSX.utils.aoa_to_sheet([head, ...rows.map(fila)]);
+    ws['!cols'] = [{wch:20},{wch:14},{wch:15},{wch:15},{wch:38},{wch:28},{wch:14},{wch:8},{wch:18},{wch:13},{wch:13},{wch:11},{wch:10},{wch:14},{wch:20}];
+    ws['!autofilter'] = { ref: `A1:O${rows.length + 1}` };
+    return ws;
+  };
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, hoja(preciosCtrl.filter(r => !r.corregido)), 'Para corregir');
+  XLSX.utils.book_append_sheet(wb, hoja([...preciosCtrl].reverse()), 'Todos los controles');
+  XLSX.writeFile(wb, `Control_precios_${hoyISO()}.xlsx`);
+  showToast('📊 Control de precios exportado');
+}
+
+function limpiarPrecios() {
+  if (!puedeBorrar()) return;
+  if (!confirm(`¿Borrar los ${preciosCtrl.length} controles de precio? Exportá antes si los necesitás.`)) return;
+  preciosCtrl = [];
+  guardarPrecios();
+  addAudit('system', '🏷️ Control de precios borrado', null);
+  renderPrecios();
+  showToast('🧹 Control de precios borrado');
 }
 
 // ── Pestaña Vencimientos ──
