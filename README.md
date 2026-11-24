@@ -43,3 +43,11 @@ App para contar el inventario con el celular (`inventario-scanner.html`).
 - Cualquier usuario puede **descontar unidades vendidas** de un lote; si llega a 0 se cierra como *Vendido*. En el control rápido, si el lote ya existe se escribe lo que **queda** en góndola y la diferencia se cuenta como vendida.
 - Gerente, Dueño/a, Supervisor/a y Encargado/a marcan qué se hizo con cada lote (rebajado, al frente, devuelto, merma) y configuran los días de alerta por rubro (ej. `PERECIBLES - LACTEOS` = 15) o por producto (0 = no pedir fecha).
 - Los datos de vencimientos se guardan aparte (`mm_venc`, `mm_venc_reglas`): borrar el inventario no los borra. Entran en la copia de seguridad.
+
+## Verificador de precios (noviembre 2026)
+- Pestaña **🏷️ Precios**: escaneás (cámara o lector) un producto y muestra en grande el **precio de venta del maestro**, el rubro, los códigos y el stock. Gerente, Dueño/a, Supervisor/a y Encargado/a ven también el costo c/IVA y el margen.
+- Se compara con la etiqueta de la góndola: **✅ Coincide**, **⚠️ Es distinto** (se escribe el precio de la etiqueta; acepta `4500`, `4.500` o `4.500,50`) o **🚫 No tiene etiqueta**. Un código que no está en el maestro se puede anotar para darlo de alta.
+- Lo que no coincide queda en **Para corregir** (con la diferencia y el sector); se marca **✔ Corregido** cuando se cambia la etiqueta. El número rojo en la pestaña son las etiquetas pendientes.
+- Si se escaneó con la cámara, después de registrar se vuelve a abrir sola para el próximo producto.
+- **Exportar control de precios**: Excel con las hojas *Para corregir* y *Todos los controles*.
+- Los precios salen del maestro cargado: importar el maestro del día para que estén al día. Los controles se guardan en el celular (`mm_precios`), no se borran con el inventario y entran en la copia de seguridad. No se comparten por Google Sheets.
